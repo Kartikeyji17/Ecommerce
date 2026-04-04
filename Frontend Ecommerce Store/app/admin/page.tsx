@@ -1,173 +1,319 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/context/auth-context'
+import {
+  BarChart2, Package, ShoppingBag, Users, Plus, Pencil,
+  Trash2, Shield, ShieldOff, Loader2, TrendingUp, DollarSign
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { BarChart, Users, ShoppingCart, DollarSign, TrendingUp, Settings } from 'lucide-react'
+import { useAuth } from '@/context/auth-context'
 
-export default function AdminDashboard() {
+interface Product {
+  _id: string; name: string; price: number; category: string;
+  countInStock: number; image: string; description: string;
+}
+interface Order {
+  _id: string; totalPrice: number; isPaid: boolean;
+  status: string; createdAt: string;
+  user?: { name: string; email: string };
+  items: { name: string; quantity: number; price: number }[];
+}
+interface User {
+  _id: string; name: string; email: string; isAdmin: boolean; createdAt: string;
+}
+interface Analytics {
+  totalUsers: number; totalProducts: number;
+  totalOrders: number; totalRevenue: number;
+  monthlyOrders: { _id: { month: number; year: number }; revenue: number; count: number }[];
+  topProducts: { _id: string; totalSold: number }[];
+}
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+export default function AdminPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const [activeTab, setActiveTab] = useState('analytics')
+  const [analytics, setAnalytics] = useState<Analytics | null>(null)
+  const [products, setProducts] = useState<Product[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(false)
+  const [productModal, setProductModal] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [productForm, setProductForm] = useState({
+    name: '', price: '', description: '', image: '', category: '', countInStock: ''
+  })
 
-  // Check if user is admin
-  if (!user || !user.isAdmin) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p className="text-muted-foreground mb-8">You don&apos;t have permission to access the admin dashboard.</p>
-          <Button onClick={() => router.push('/')}>
-            Go to Home
-          </Button>
-        </div>
-      </div>
-    )
+  const token = (user as any)?.backendToken
+
+  useEffect(() => {
+    if (!user) { router.push('/auth/login'); return }
+    if (!user.isAdmin) { router.push('/'); return }
+  }, [user])
+
+  useEffect(() => {
+    if (!user?.isAdmin) return
+    if (activeTab === 'analytics') fetchAnalytics()
+    if (activeTab === 'products') fetchProducts()
+    if (activeTab === 'orders') fetchOrders()
+    if (activeTab === 'users') fetchUsers()
+  }, [activeTab, user])
+
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const API = process.env.NEXT_PUBLIC_API_URL
+
+  const fetchAnalytics = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${API}/api/auth/analytics`, { headers })
+      const data = await res.json()
+      if (res.ok) setAnalytics(data)
+    } finally { setLoading(false) }
   }
 
-  // Mock dashboard data
-  const stats = [
-    {
-      label: 'Total Revenue',
-      value: '$24,567.89',
-      change: '+12.5%',
-      icon: DollarSign,
-      color: 'bg-emerald-100 text-emerald-700',
-    },
-    {
-      label: 'Total Orders',
-      value: '1,234',
-      change: '+8.2%',
-      icon: ShoppingCart,
-      color: 'bg-blue-100 text-blue-700',
-    },
-    {
-      label: 'Total Customers',
-      value: '856',
-      change: '+15.3%',
-      icon: Users,
-      color: 'bg-purple-100 text-purple-700',
-    },
-    {
-      label: 'Growth Rate',
-      value: '23.5%',
-      change: '+2.1%',
-      icon: TrendingUp,
-      color: 'bg-orange-100 text-orange-700',
-    },
+  const fetchProducts = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${API}/api/products`, { headers })
+      const data = await res.json()
+      if (res.ok) setProducts(data)
+    } finally { setLoading(false) }
+  }
+
+  const fetchOrders = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${API}/api/orders/admin/all`, { headers })
+      const data = await res.json()
+      if (res.ok) setOrders(data)
+    } finally { setLoading(false) }
+  }
+
+  const fetchUsers = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${API}/api/auth/users`, { headers })
+      const data = await res.json()
+      if (res.ok) setUsers(data)
+    } finally { setLoading(false) }
+  }
+
+  const openProductModal = (product?: Product) => {
+    if (product) {
+      setEditingProduct(product)
+      setProductForm({
+        name: product.name, price: String(product.price),
+        description: product.description, image: product.image,
+        category: product.category, countInStock: String(product.countInStock)
+      })
+    } else {
+      setEditingProduct(null)
+      setProductForm({ name: '', price: '', description: '', image: '', category: '', countInStock: '' })
+    }
+    setProductModal(true)
+  }
+
+  const saveProduct = async () => {
+    const body = {
+      name: productForm.name, price: Number(productForm.price),
+      description: productForm.description, image: productForm.image,
+      category: productForm.category, countInStock: Number(productForm.countInStock)
+    }
+    const url = editingProduct ? `${API}/api/products/${editingProduct._id}` : `${API}/api/products`
+    const method = editingProduct ? 'PUT' : 'POST'
+    const res = await fetch(url, { method, headers, body: JSON.stringify(body) })
+    if (res.ok) { setProductModal(false); fetchProducts() }
+  }
+
+  const deleteProduct = async (id: string) => {
+    if (!confirm('Delete this product?')) return
+    await fetch(`${API}/api/products/${id}`, { method: 'DELETE', headers })
+    fetchProducts()
+  }
+
+  const toggleAdmin = async (id: string) => {
+    await fetch(`${API}/api/auth/users/${id}/toggle-admin`, { method: 'PUT', headers })
+    fetchUsers()
+  }
+
+  const deleteUser = async (id: string) => {
+    if (!confirm('Delete this user?')) return
+    await fetch(`${API}/api/auth/users/${id}`, { method: 'DELETE', headers })
+    fetchUsers()
+  }
+
+  const updateOrderStatus = async (id: string, status: string) => {
+    await fetch(`${API}/api/orders/${id}/status`, {
+      method: 'PUT', headers, body: JSON.stringify({ status })
+    })
+    fetchOrders()
+  }
+
+  const tabs = [
+    { id: 'analytics', label: 'Analytics', icon: BarChart2 },
+    { id: 'products', label: 'Products', icon: Package },
+    { id: 'orders', label: 'Orders', icon: ShoppingBag },
+    { id: 'users', label: 'Users', icon: Users },
   ]
 
-  const recentOrders = [
-    {
-      id: 'ORD-001',
-      customer: 'John Doe',
-      date: '2024-01-05',
-      amount: '$149.99',
-      status: 'Delivered',
-    },
-    {
-      id: 'ORD-002',
-      customer: 'Jane Smith',
-      date: '2024-01-04',
-      amount: '$299.99',
-      status: 'In Transit',
-    },
-    {
-      id: 'ORD-003',
-      customer: 'Bob Johnson',
-      date: '2024-01-03',
-      amount: '$89.99',
-      status: 'Processing',
-    },
-    {
-      id: 'ORD-004',
-      customer: 'Alice Williams',
-      date: '2024-01-02',
-      amount: '$199.99',
-      status: 'Delivered',
-    },
-  ]
+  if (!user?.isAdmin) return null
 
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+        <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-4xl font-bold">Admin Dashboard</h1>
-            <p className="text-muted-foreground">Welcome back, {user?.name}</p>
+            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+            <p className="text-muted-foreground">Manage your store</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="gap-2">
-              <Settings className="w-4 h-4" />
-              Settings
-            </Button>
-            <Button className="gap-2">
-              <BarChart className="w-4 h-4" />
-              Reports
-            </Button>
-          </div>
+          <span className="px-3 py-1 bg-accent text-accent-foreground rounded-full text-sm font-semibold">
+            Admin
+          </span>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat) => {
-            const Icon = stat.icon
-            return (
-              <div key={stat.label} className="border border-border rounded-lg p-6 bg-card">
-                <div className="flex items-start justify-between mb-4">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stat.color}`}>
-                    <Icon className="w-6 h-6" />
+        {/* Tabs */}
+        <div className="flex gap-1 border-b border-border mb-8">
+          {tabs.map((tab) => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition -mb-px ${
+                activeTab === tab.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}>
+              <tab.icon className="w-4 h-4" />{tab.label}
+            </button>
+          ))}
+        </div>
+
+        {loading && (
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {/* ANALYTICS TAB */}
+        {activeTab === 'analytics' && !loading && analytics && (
+          <div className="space-y-8">
+            {/* Stat Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Total Revenue', value: `$${analytics.totalRevenue.toFixed(2)}`, icon: DollarSign, color: 'text-green-600 bg-green-100' },
+                { label: 'Total Orders', value: analytics.totalOrders, icon: ShoppingBag, color: 'text-blue-600 bg-blue-100' },
+                { label: 'Total Products', value: analytics.totalProducts, icon: Package, color: 'text-purple-600 bg-purple-100' },
+                { label: 'Total Users', value: analytics.totalUsers, icon: Users, color: 'text-orange-600 bg-orange-100' },
+              ].map((stat) => (
+                <div key={stat.label} className="border border-border rounded-lg p-6">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${stat.color}`}>
+                    <stat.icon className="w-5 h-5" />
                   </div>
-                  <span className="text-xs font-semibold text-green-600 bg-green-100 px-2 py-1 rounded">
-                    {stat.change}
-                  </span>
+                  <p className="text-2xl font-bold">{stat.value}</p>
+                  <p className="text-sm text-muted-foreground">{stat.label}</p>
                 </div>
-                <p className="text-muted-foreground text-sm mb-2">{stat.label}</p>
-                <p className="text-3xl font-bold">{stat.value}</p>
-              </div>
-            )
-          })}
-        </div>
+              ))}
+            </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-          {/* Recent Orders */}
-          <div className="lg:col-span-2 border border-border rounded-lg p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">Recent Orders</h2>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/admin/orders')}>
-                View All →
+            {/* Monthly Revenue */}
+            <div className="border border-border rounded-lg p-6">
+              <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" /> Monthly Revenue
+              </h2>
+              {analytics.monthlyOrders.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No revenue data yet</p>
+              ) : (
+                <div className="flex items-end gap-3 h-48">
+                  {analytics.monthlyOrders.map((m) => {
+                    const maxRevenue = Math.max(...analytics.monthlyOrders.map(o => o.revenue))
+                    const height = maxRevenue > 0 ? (m.revenue / maxRevenue) * 100 : 0
+                    return (
+                      <div key={`${m._id.year}-${m._id.month}`} className="flex-1 flex flex-col items-center gap-2">
+                        <p className="text-xs font-semibold">${m.revenue.toFixed(0)}</p>
+                        <div className="w-full bg-primary rounded-t transition-all"
+                          style={{ height: `${Math.max(height, 4)}%` }} />
+                        <p className="text-xs text-muted-foreground">{MONTHS[m._id.month - 1]}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Top Products */}
+            <div className="border border-border rounded-lg p-6">
+              <h2 className="text-lg font-bold mb-4">Top Selling Products</h2>
+              {analytics.topProducts.length === 0 ? (
+                <p className="text-muted-foreground">No sales data yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {analytics.topProducts.map((p, i) => (
+                    <div key={p._id} className="flex items-center gap-4">
+                      <span className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">
+                        {i + 1}
+                      </span>
+                      <p className="flex-1 font-medium">{p._id}</p>
+                      <span className="text-sm text-muted-foreground">{p.totalSold} sold</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* PRODUCTS TAB */}
+        {activeTab === 'products' && !loading && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <p className="text-muted-foreground">{products.length} products</p>
+              <Button onClick={() => openProductModal()} className="gap-2">
+                <Plus className="w-4 h-4" /> Add Product
               </Button>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="border border-border rounded-lg overflow-hidden">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 font-semibold">Order ID</th>
-                    <th className="text-left py-3 px-4 font-semibold">Customer</th>
-                    <th className="text-left py-3 px-4 font-semibold">Date</th>
-                    <th className="text-left py-3 px-4 font-semibold">Amount</th>
-                    <th className="text-left py-3 px-4 font-semibold">Status</th>
+                <thead className="bg-secondary">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-semibold">Product</th>
+                    <th className="text-left px-4 py-3 font-semibold">Category</th>
+                    <th className="text-left px-4 py-3 font-semibold">Price</th>
+                    <th className="text-left px-4 py-3 font-semibold">Stock</th>
+                    <th className="text-left px-4 py-3 font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {recentOrders.map((order) => (
-                    <tr key={order.id} className="border-b border-border hover:bg-secondary/50 transition">
-                      <td className="py-3 px-4 font-medium">{order.id}</td>
-                      <td className="py-3 px-4">{order.customer}</td>
-                      <td className="py-3 px-4 text-muted-foreground">{order.date}</td>
-                      <td className="py-3 px-4 font-semibold">{order.amount}</td>
-                      <td className="py-3 px-4">
-                        <span className={`text-xs px-2 py-1 rounded font-semibold ${
-                          order.status === 'Delivered'
-                            ? 'bg-green-100 text-green-700'
-                            : order.status === 'In Transit'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-yellow-100 text-yellow-700'
+                  {products.map((product) => (
+                    <tr key={product._id} className="border-t border-border hover:bg-secondary/30">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          {product.image && (
+                            <img src={product.image} alt={product.name}
+                              className="w-10 h-10 rounded object-cover border border-border" />
+                          )}
+                          <p className="font-medium">{product.name}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{product.category}</td>
+                      <td className="px-4 py-3 font-semibold">${product.price}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          product.countInStock > 10 ? 'bg-green-100 text-green-700' :
+                          product.countInStock > 0 ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-red-100 text-red-700'
                         }`}>
-                          {order.status}
+                          {product.countInStock > 0 ? `${product.countInStock} left` : 'Out of stock'}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => openProductModal(product)}
+                            className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => deleteProduct(product._id)}
+                            className="p-1.5 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -175,116 +321,168 @@ export default function AdminDashboard() {
               </table>
             </div>
           </div>
+        )}
 
-          {/* Quick Actions */}
-          <div className="border border-border rounded-lg p-6">
-            <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
-
-            <div className="space-y-2">
-              <Button
-                className="w-full justify-start"
-                onClick={() => router.push('/admin/products')}
-              >
-                Manage Products
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={() => router.push('/admin/orders')}
-              >
-                Manage Orders
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={() => router.push('/admin/customers')}
-              >
-                View Customers
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={() => router.push('/admin/analytics')}
-              >
-                View Analytics
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={() => router.push('/admin/settings')}
-              >
-                Store Settings
-              </Button>
-            </div>
-
-            {/* Info Card */}
-            <div className="mt-6 p-4 bg-accent/10 rounded-lg border border-accent/20">
-              <p className="text-sm font-semibold mb-2">📊 Today&apos;s Summary</p>
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p>Orders: 12</p>
-                <p>Revenue: $2,450</p>
-                <p>Customers: 8</p>
+        {/* ORDERS TAB */}
+        {activeTab === 'orders' && !loading && (
+          <div className="space-y-4">
+            <p className="text-muted-foreground">{orders.length} total orders</p>
+            {orders.length === 0 ? (
+              <div className="text-center py-16 border border-border rounded-lg">
+                <ShoppingBag className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No orders yet</p>
               </div>
+            ) : (
+              <div className="border border-border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-semibold">Order ID</th>
+                      <th className="text-left px-4 py-3 font-semibold">Customer</th>
+                      <th className="text-left px-4 py-3 font-semibold">Total</th>
+                      <th className="text-left px-4 py-3 font-semibold">Paid</th>
+                      <th className="text-left px-4 py-3 font-semibold">Status</th>
+                      <th className="text-left px-4 py-3 font-semibold">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map((order) => (
+                      <tr key={order._id} className="border-t border-border hover:bg-secondary/30">
+                        <td className="px-4 py-3 font-mono text-xs">#{order._id.slice(-8).toUpperCase()}</td>
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{order.user?.name || 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground">{order.user?.email}</p>
+                        </td>
+                        <td className="px-4 py-3 font-bold">${order.totalPrice.toFixed(2)}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            order.isPaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {order.isPaid ? 'Paid' : 'Unpaid'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <select
+                            value={order.status}
+                            onChange={(e) => updateOrderStatus(order._id, e.target.value)}
+                            className="text-xs border border-border rounded px-2 py-1 bg-background"
+                          >
+                            {['pending','paid','processing','shipped','delivered','cancelled'].map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs">
+                          {new Date(order.createdAt).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* USERS TAB */}
+        {activeTab === 'users' && !loading && (
+          <div>
+            <p className="text-muted-foreground mb-6">{users.length} registered users</p>
+            <div className="border border-border rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-semibold">Name</th>
+                    <th className="text-left px-4 py-3 font-semibold">Email</th>
+                    <th className="text-left px-4 py-3 font-semibold">Role</th>
+                    <th className="text-left px-4 py-3 font-semibold">Joined</th>
+                    <th className="text-left px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u._id} className="border-t border-border hover:bg-secondary/30">
+                      <td className="px-4 py-3 font-medium">{u.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          u.isAdmin ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {u.isAdmin ? 'Admin' : 'User'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {new Date(u.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => toggleAdmin(u._id)}
+                            title={u.isAdmin ? 'Remove admin' : 'Make admin'}
+                            className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground">
+                            {u.isAdmin ? <ShieldOff className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                          </button>
+                          {u._id !== (user as any).id && (
+                            <button onClick={() => deleteUser(u._id)}
+                              className="p-1.5 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Additional Sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Top Products */}
-          <div className="border border-border rounded-lg p-6">
-            <h2 className="text-xl font-bold mb-4">Top Products</h2>
-
-            <div className="space-y-3">
+      {/* Product Modal */}
+      {productModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-6">{editingProduct ? 'Edit Product' : 'Add Product'}</h2>
+            <div className="space-y-4">
               {[
-                { name: 'Wireless Headphones', sales: 156, revenue: '$39,000' },
-                { name: 'Classic Leather Watch', sales: 143, revenue: '$18,567' },
-                { name: 'Premium Sunglasses', sales: 98, revenue: '$19,600' },
-                { name: 'Minimalist Backpack', sales: 87, revenue: '$7,830' },
-              ].map((product) => (
-                <div key={product.name} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-sm">{product.name}</p>
-                    <p className="text-xs text-muted-foreground">{product.sales} sales</p>
-                  </div>
-                  <p className="font-bold text-sm">{product.revenue}</p>
+                { label: 'Product Name', key: 'name', type: 'text', placeholder: 'e.g. Classic Watch' },
+                { label: 'Price ($)', key: 'price', type: 'number', placeholder: '29.99' },
+                { label: 'Category', key: 'category', type: 'text', placeholder: 'e.g. Electronics' },
+                { label: 'Stock Count', key: 'countInStock', type: 'number', placeholder: '100' },
+                { label: 'Image URL', key: 'image', type: 'text', placeholder: 'https://...' },
+              ].map((field) => (
+                <div key={field.key}>
+                  <label className="block text-sm font-medium mb-2">{field.label}</label>
+                  <input type={field.type}
+                    value={(productForm as any)[field.key]}
+                    onChange={(e) => setProductForm({ ...productForm, [field.key]: e.target.value })}
+                    placeholder={field.placeholder}
+                    className="w-full px-3 py-2 rounded border border-border bg-background" />
                 </div>
               ))}
+              <div>
+                <label className="block text-sm font-medium mb-2">Description</label>
+                <textarea
+                  value={productForm.description}
+                  onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                  placeholder="Product description..."
+                  rows={3}
+                  className="w-full px-3 py-2 rounded border border-border bg-background resize-none" />
+              </div>
+              {productForm.image && (
+                <img src={productForm.image} alt="Preview"
+                  className="w-full h-32 object-cover rounded border border-border" />
+              )}
             </div>
-          </div>
-
-          {/* Customer Insights */}
-          <div className="border border-border rounded-lg p-6">
-            <h2 className="text-xl font-bold mb-4">Customer Insights</h2>
-
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-medium mb-2">Customer Satisfaction</p>
-                <div className="w-full h-2 bg-border rounded-full overflow-hidden">
-                  <div className="h-full bg-green-500" style={{ width: '92%' }} />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">4.6/5.0 average rating</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium mb-2">Return Rate</p>
-                <div className="w-full h-2 bg-border rounded-full overflow-hidden">
-                  <div className="h-full bg-orange-500" style={{ width: '3%' }} />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">3% of orders</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium mb-2">Customer Retention</p>
-                <div className="w-full h-2 bg-border rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500" style={{ width: '78%' }} />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">78% repeat customers</p>
-              </div>
+            <div className="flex gap-3 mt-6">
+              <Button variant="outline" className="flex-1" onClick={() => setProductModal(false)}>Cancel</Button>
+              <Button className="flex-1" onClick={saveProduct}>
+                {editingProduct ? 'Save Changes' : 'Add Product'}
+              </Button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

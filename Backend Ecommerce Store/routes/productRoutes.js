@@ -1,11 +1,12 @@
 const express = require("express");
-const Product = require("../models/Product");
-
 const router = express.Router();
+const { getProducts, getProductById, createProduct, updateProduct, deleteProduct } = require("../controllers/productController");
+const { protect, adminOnly } = require("../middleware/authMiddleware");
 
-router.get("/", async (req, res) => {
-  const products = await Product.find();
-  res.json(products);
-});
+router.get("/", getProducts);
+router.get("/:id", getProductById);
+router.post("/", protect, adminOnly, createProduct);
+router.put("/:id", protect, adminOnly, updateProduct);
+router.delete("/:id", protect, adminOnly, deleteProduct);
 
 module.exports = router;
