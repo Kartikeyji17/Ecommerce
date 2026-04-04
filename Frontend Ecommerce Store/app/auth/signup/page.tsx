@@ -18,7 +18,8 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [agreeToTerms, setAgreeToTerms] = useState(false)
 
-  const passwordStrength = password.length >= 8 ? 'strong' : password.length >= 6 ? 'medium' : 'weak'
+  const passwordStrength =
+    password.length >= 8 ? 'strong' : password.length >= 6 ? 'medium' : 'weak'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,7 +47,7 @@ export default function SignupPage() {
 
     try {
       await signup(email, password, name)
-      router.push('/cart')
+      router.push('/')
     } catch (err: any) {
       setError(err.message || 'Signup failed. Please try again.')
     }
@@ -78,7 +79,6 @@ export default function SignupPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Name */}
             <div>
               <label className="block text-sm font-medium mb-2">Full Name</label>
               <div className="relative">
@@ -93,7 +93,6 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Email */}
             <div>
               <label className="block text-sm font-medium mb-2">Email Address</label>
               <div className="relative">
@@ -108,7 +107,6 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Password */}
             <div>
               <label className="block text-sm font-medium mb-2">Password</label>
               <div className="relative">
@@ -128,26 +126,18 @@ export default function SignupPage() {
                   {showPassword ? '👁️' : '👁️‍🗨️'}
                 </button>
               </div>
-
-              {/* Password Strength */}
               {password && (
                 <div className="mt-2 flex gap-2">
-                  <div
-                    className={`h-1 flex-1 rounded ${
-                      passwordStrength === 'strong'
-                        ? 'bg-green-500'
-                        : passwordStrength === 'medium'
-                        ? 'bg-yellow-500'
-                        : 'bg-red-500'
-                    }`}
-                  />
-                  <div className={`h-1 flex-1 rounded ${passwordStrength !== 'weak' ? 'bg-border' : ''}`} />
-                  <div className={`h-1 flex-1 rounded ${passwordStrength === 'strong' ? 'bg-border' : ''}`} />
+                  <div className={`h-1 flex-1 rounded ${
+                    passwordStrength === 'strong' ? 'bg-green-500' :
+                    passwordStrength === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
+                  }`} />
+                  <div className={`h-1 flex-1 rounded ${passwordStrength !== 'weak' ? 'bg-green-500' : 'bg-border'}`} />
+                  <div className={`h-1 flex-1 rounded ${passwordStrength === 'strong' ? 'bg-green-500' : 'bg-border'}`} />
                 </div>
               )}
             </div>
 
-            {/* Confirm Password */}
             <div>
               <label className="block text-sm font-medium mb-2">Confirm Password</label>
               <div className="relative">
@@ -165,7 +155,6 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Terms */}
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
@@ -185,7 +174,6 @@ export default function SignupPage() {
               </span>
             </label>
 
-            {/* Submit Button */}
             <Button
               type="submit"
               disabled={isLoading}
@@ -196,27 +184,6 @@ export default function SignupPage() {
             </Button>
           </form>
 
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or</span>
-            </div>
-          </div>
-
-          {/* Social Signup */}
-          <div className="space-y-2">
-            <Button variant="outline" className="w-full">
-              Continue with Google
-            </Button>
-            <Button variant="outline" className="w-full">
-              Continue with Apple
-            </Button>
-          </div>
-
-          {/* Login Link */}
           <p className="text-center text-sm text-muted-foreground mt-6">
             Already have an account?{' '}
             <Link href="/auth/login" className="text-primary hover:underline font-medium">

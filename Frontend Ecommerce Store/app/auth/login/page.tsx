@@ -26,7 +26,7 @@ export default function LoginPage() {
 
     try {
       await login(email, password)
-      router.push('/cart')
+      router.push('/')
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.')
     }
@@ -58,7 +58,6 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
             <div>
               <label className="block text-sm font-medium mb-2">Email Address</label>
               <div className="relative">
@@ -73,7 +72,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-medium">Password</label>
@@ -100,13 +98,11 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember Me */}
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" className="w-4 h-4 rounded" defaultChecked />
               Remember me
             </label>
 
-            {/* Submit Button */}
             <Button
               type="submit"
               disabled={isLoading}
@@ -117,38 +113,12 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or</span>
-            </div>
-          </div>
-
-          {/* Social Login */}
-          <div className="space-y-2">
-            <Button variant="outline" className="w-full">
-              Continue with Google
-            </Button>
-            <Button variant="outline" className="w-full">
-              Continue with Apple
-            </Button>
-          </div>
-
-          {/* Signup Link */}
           <p className="text-center text-sm text-muted-foreground mt-6">
             Don&apos;t have an account?{' '}
             <Link href="/auth/signup" className="text-primary hover:underline font-medium">
               Sign up
             </Link>
           </p>
-        </div>
-
-        {/* Info */}
-        <div className="mt-6 text-center text-xs text-muted-foreground">
-          <p>Demo credentials: any email/password combination works</p>
         </div>
       </div>
     </div>

@@ -1,47 +1,19 @@
-'use client'
-
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ProductCard } from '@/components/product-card'
+import { NewsletterForm } from '@/components/newsletter-form'
+import { getProducts } from '@/lib/api'
 
-// Mock featured products
-const FEATURED_PRODUCTS = [
-  {
-    id: '1',
-    name: 'Classic Leather Watch',
-    price: 129.99,
-    image: 'https://images.unsplash.com/photo-1523170335258-f5ed11844a49?w=400&h=400&fit=crop',
-    category: 'Accessories',
-    rating: 4.5,
-  },
-  {
-    id: '2',
-    name: 'Premium Sunglasses',
-    price: 199.99,
-    image: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&h=400&fit=crop',
-    category: 'Accessories',
-    rating: 4.8,
-  },
-  {
-    id: '3',
-    name: 'Wireless Headphones',
-    price: 249.99,
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop',
-    category: 'Electronics',
-    rating: 4.6,
-  },
-  {
-    id: '4',
-    name: 'Minimalist Backpack',
-    price: 89.99,
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop',
-    category: 'Bags',
-    rating: 4.4,
-  },
-]
+export default async function Home() {
+  let products = [];
 
-export default function Home() {
+  try {
+    products = await getProducts();
+  } catch (error) {
+    console.error("Error fetching products:", error);
+  }
+
   return (
     <div className="w-full">
       {/* Hero Section */}
@@ -102,20 +74,24 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Products Section */}
+      {/* Featured Products */}
       <section className="py-16 md:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Featured Products</h2>
             <p className="text-lg text-muted-foreground">
-              Handpicked selection of our most loved items
+              Real products from backend
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {FEATURED_PRODUCTS.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
+            {products.length > 0 ? (
+              products.slice(0, 4).map((product: any) => (
+                <ProductCard key={product._id} product={product} />
+              ))
+            ) : (
+              <p>No products found</p>
+            )}
           </div>
 
           <div className="mt-12 text-center">
@@ -174,16 +150,7 @@ export default function Home() {
             <p className="text-lg mb-8 text-accent-foreground/90 max-w-2xl mx-auto">
               Get exclusive offers, new product launches, and special discounts delivered to your inbox.
             </p>
-            <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto" onSubmit={(e) => { e.preventDefault() }}>
-              <input
-                type="email"
-                placeholder="Enter your email"
-                className="flex-1 px-4 py-3 rounded bg-accent-foreground text-accent placeholder:text-accent/50"
-              />
-              <Button className="bg-accent-foreground text-accent hover:bg-accent-foreground/90">
-                Subscribe
-              </Button>
-            </form>
+            <NewsletterForm />
           </div>
         </div>
       </section>

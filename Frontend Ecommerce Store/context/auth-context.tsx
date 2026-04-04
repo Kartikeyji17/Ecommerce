@@ -1,12 +1,14 @@
 'use client'
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react'
+import React, { createContext, useContext, ReactNode } from 'react'
+import { useSession, signIn, signOut } from 'next-auth/react'
 
 export interface User {
   id: string
   email: string
   name: string
   isAdmin?: boolean
+  backendToken?: string
 }
 
 interface AuthContextType {
@@ -20,80 +22,60 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const { data: session, status } = useSession()
 
-  // Load user from localStorage on mount
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user')
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser))
-      } catch (error) {
-        console.error('Failed to parse stored user:', error)
-        localStorage.removeItem('user')
+  const isLoading = status === 'loading'
+
+  const user: User | null = session?.user
+    ? {
+        id: (session.user as any).id,
+        email: session.user.email!,
+        name: session.user.name!,
+        isAdmin: (session.user as any).isAdmin,
+        backendToken: (session.user as any).backendToken,
       }
-    }
-    setIsLoading(false)
-  }, [])
+    : null
 
   const login = async (email: string, password: string) => {
-    setIsLoading(true)
-    try {
-      // Mock API call - replace with real API
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      // In a real app, you'd validate credentials against a backend
-      // For now, we'll create a mock user
-      if (!email || !password) {
-        throw new Error('Email and password are required')
-      }
-
-      const mockUser: User = {
-        id: Math.random().toString(36).substr(2, 9),
-        email,
-        name: email.split('@')[0],
-      }
-
-      setUser(mockUser)
-      localStorage.setItem('user', JSON.stringify(mockUser))
-    } catch (error) {
-      console.error('Login error:', error)
-      throw error
-    } finally {
-      setIsLoading(false)
+    const result = await signIn('credentials', {
+      email,
+      password,
+      redirect: false,
+    })
+    if (result?.error) {
+      throw new Error(result.error)
     }
   }
 
   const signup = async (email: string, password: string, name: string) => {
-    setIsLoading(true)
-    try {
-      // Mock API call - replace with real API
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      if (!email || !password || !name) {
-        throw new Error('All fields are required')
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
       }
+    )
 
-      const mockUser: User = {
-        id: Math.random().toString(36).substr(2, 9),
-        email,
-        name,
-      }
+    const data = await res.json()
 
-      setUser(mockUser)
-      localStorage.setItem('user', JSON.stringify(mockUser))
-    } catch (error) {
-      console.error('Signup error:', error)
-      throw error
-    } finally {
-      setIsLoading(false)
+    if (!res.ok) {
+      throw new Error(data.message || 'Signup failed')
+    }
+
+    const result = await signIn('credentials', {
+      email,
+      password,
+      redirect: false,
+    })
+
+    if (result?.error) {
+      throw new Error(result.error)
     }
   }
 
   const logout = () => {
-    setUser(null)
-    localStorage.removeItem('user')
+    signOut({ callbackUrl: '/' })
   }
 
   return (

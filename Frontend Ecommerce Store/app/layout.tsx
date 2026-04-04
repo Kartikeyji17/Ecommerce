@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { CartProvider } from '@/context/cart-context'
-import { AuthProvider } from '@/context/auth-context'
+import { Providers } from '@/components/providers'
 import { Navbar } from '@/components/navbar'
 import { Footer } from '@/components/footer'
 import './globals.css'
@@ -41,15 +40,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans antialiased flex flex-col min-h-screen">
-        <AuthProvider>
-          <CartProvider>
-            <Navbar />
-            <main className="flex-1">
-              {children}
-            </main>
-            <Footer />
-          </CartProvider>
-        </AuthProvider>
+        <Providers>
+          <Navbar />
+          <main className="flex-1">
+            {children}
+          </main>
+          <Footer />
+        </Providers>
         <Analytics />
       </body>
     </html>
