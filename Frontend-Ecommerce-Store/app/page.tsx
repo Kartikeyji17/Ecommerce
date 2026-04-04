@@ -41,7 +41,7 @@ export default async function Home() {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="border-primary-foreground text-primary-foreground hover:bg-primary-foreground/10"
+                    className="border-primary-foreground text-primary hover:bg-primary-foreground/10"
                   >
                     Learn More
                   </Button>
@@ -110,7 +110,7 @@ export default async function Home() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="flex flex-col gap-4">
-              <div className="w-12 h-12 bg-accent text-accent-foreground rounded-lg flex items-center justify-center font-bold text-xl">
+              <div className="w-12 h-12 bg-white text-accent-foreground rounded-lg flex items-center justify-center font-bold text-xl">
                 ⚡
               </div>
               <h3 className="text-xl font-bold">Fast Shipping</h3>
@@ -120,7 +120,7 @@ export default async function Home() {
             </div>
 
             <div className="flex flex-col gap-4">
-              <div className="w-12 h-12 bg-accent text-accent-foreground rounded-lg flex items-center justify-center font-bold text-xl">
+              <div className="w-12 h-12 bg-white text-accent-foreground rounded-lg flex items-center justify-center font-bold text-xl">
                 🛡️
               </div>
               <h3 className="text-xl font-bold">Secure Checkout</h3>
@@ -130,7 +130,7 @@ export default async function Home() {
             </div>
 
             <div className="flex flex-col gap-4">
-              <div className="w-12 h-12 bg-accent text-accent-foreground rounded-lg flex items-center justify-center font-bold text-xl">
+              <div className="w-12 h-12 bg-white text-accent-foreground rounded-lg flex items-center justify-center font-bold text-xl">
                 ✨
               </div>
               <h3 className="text-xl font-bold">Premium Quality</h3>
