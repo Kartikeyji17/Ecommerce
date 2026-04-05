@@ -17,5 +17,7 @@ export const config = {
     '/orders/:path*',
     '/profile/:path*',
     '/checkout/:path*',
+    '/seller',           // ← add this
+    '/seller/:path*',    // ← and this (for future nested pages)
   ],
 }

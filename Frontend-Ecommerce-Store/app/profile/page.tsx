@@ -2,9 +2,10 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { User, Package, MapPin, Save, Eye, EyeOff, CheckCircle2, Clock, Truck } from 'lucide-react'
+import { User, Package, MapPin, Save, Eye, EyeOff, CheckCircle2, Clock, Truck, Store } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/auth-context'
+import { applyForSeller } from '@/lib/api'
 
 interface Order {
   _id: string
@@ -33,6 +34,11 @@ function ProfileContent() {
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+
+  // Seller application state
+  const [sellerForm, setSellerForm] = useState({ shopName: '', shopDescription: '' })
+  const [sellerLoading, setSellerLoading] = useState(false)
+  const [sellerMessage, setSellerMessage] = useState('')
 
   const [infoForm, setInfoForm] = useState({
     name: user?.name || '',
@@ -75,6 +81,26 @@ function ProfileContent() {
     setTimeout(() => setSaveSuccess(false), 3000)
   }
 
+  const handleSellerApply = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!sellerForm.shopName.trim()) { setSellerMessage('Shop name is required'); return }
+    setSellerLoading(true)
+    setSellerMessage('')
+    try {
+      const data = await applyForSeller(sellerForm, user?.backendToken!)
+      if (data.message) {
+        setSellerMessage('✅ Application submitted! Admin will review shortly.')
+        setSellerForm({ shopName: '', shopDescription: '' })
+      } else {
+        setSellerMessage(data.message || '❌ Something went wrong')
+      }
+    } catch (err) {
+      setSellerMessage('❌ Failed to submit application')
+    } finally {
+      setSellerLoading(false)
+    }
+  }
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'delivered': return <CheckCircle2 className="w-4 h-4 text-green-500" />
@@ -97,7 +123,17 @@ function ProfileContent() {
     { id: 'info', label: 'Personal Info', icon: User },
     { id: 'orders', label: 'Order History', icon: Package },
     { id: 'addresses', label: 'Saved Addresses', icon: MapPin },
+    { id: 'seller', label: 'Become a Seller', icon: Store },
   ]
+
+  // Seller status badge
+  const renderSellerBadge = () => {
+    const status = user?.sellerStatus
+    if (status === 'approved') return <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold">✅ Approved Seller</span>
+    if (status === 'pending') return <span className="text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full font-semibold">⏳ Application Pending</span>
+    if (status === 'rejected') return <span className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">❌ Application Rejected</span>
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -108,18 +144,21 @@ function ProfileContent() {
             {user?.name?.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h1 className="text-2xl font-bold">{user?.name}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold">{user?.name}</h1>
+              {renderSellerBadge()}
+            </div>
             <p className="text-muted-foreground">{user?.email}</p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-border mb-8">
+        <div className="flex gap-1 border-b border-border mb-8 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition -mb-px ${
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition -mb-px whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -134,27 +173,19 @@ function ProfileContent() {
         {/* TAB 1 — Personal Info */}
         {activeTab === 'info' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Basic Info */}
             <div className="border border-border rounded-lg p-6">
               <h2 className="text-lg font-bold mb-6">Basic Information</h2>
               <form onSubmit={handleSaveInfo} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">Full Name</label>
-                  <input
-                    type="text"
-                    value={infoForm.name}
+                  <input type="text" value={infoForm.name}
                     onChange={(e) => setInfoForm({ ...infoForm, name: e.target.value })}
-                    className="w-full px-3 py-2 rounded border border-border bg-background"
-                  />
+                    className="w-full px-3 py-2 rounded border border-border bg-background" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2">Email Address</label>
-                  <input
-                    type="email"
-                    value={infoForm.email}
-                    disabled
-                    className="w-full px-3 py-2 rounded border border-border bg-background opacity-60"
-                  />
+                  <input type="email" value={infoForm.email} disabled
+                    className="w-full px-3 py-2 rounded border border-border bg-background opacity-60" />
                   <p className="text-xs text-muted-foreground mt-1">Email cannot be changed</p>
                 </div>
                 <Button type="submit" className="w-full gap-2">
@@ -164,20 +195,17 @@ function ProfileContent() {
               </form>
             </div>
 
-            {/* Change Password */}
             <div className="border border-border rounded-lg p-6">
               <h2 className="text-lg font-bold mb-6">Change Password</h2>
               <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
                 <div>
                   <label className="block text-sm font-medium mb-2">Current Password</label>
                   <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
+                    <input type={showPassword ? 'text' : 'password'}
                       value={passwordForm.currentPassword}
                       onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
                       placeholder="••••••••"
-                      className="w-full px-3 py-2 pr-10 rounded border border-border bg-background"
-                    />
+                      className="w-full px-3 py-2 pr-10 rounded border border-border bg-background" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -186,27 +214,21 @@ function ProfileContent() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2">New Password</label>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
+                  <input type={showPassword ? 'text' : 'password'}
                     value={passwordForm.newPassword}
                     onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                     placeholder="••••••••"
-                    className="w-full px-3 py-2 rounded border border-border bg-background"
-                  />
+                    className="w-full px-3 py-2 rounded border border-border bg-background" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2">Confirm New Password</label>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
+                  <input type={showPassword ? 'text' : 'password'}
                     value={passwordForm.confirmPassword}
                     onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
                     placeholder="••••••••"
-                    className="w-full px-3 py-2 rounded border border-border bg-background"
-                  />
+                    className="w-full px-3 py-2 rounded border border-border bg-background" />
                 </div>
-                <Button type="submit" variant="outline" className="w-full">
-                  Update Password
-                </Button>
+                <Button type="submit" variant="outline" className="w-full">Update Password</Button>
               </form>
             </div>
           </div>
@@ -227,7 +249,6 @@ function ProfileContent() {
             ) : (
               orders.map((order) => (
                 <div key={order._id} className="border border-border rounded-lg p-6">
-                  {/* Order Header */}
                   <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Order ID</p>
@@ -252,8 +273,6 @@ function ProfileContent() {
                       View Details
                     </Button>
                   </div>
-
-                  {/* Order Items */}
                   <div className="border-t border-border pt-4 space-y-2">
                     {order.items.map((item, i) => (
                       <div key={i} className="flex items-center gap-3">
@@ -269,8 +288,6 @@ function ProfileContent() {
                       </div>
                     ))}
                   </div>
-
-                  {/* Shipping Address */}
                   {order.shippingAddress && (
                     <div className="border-t border-border pt-4 mt-4">
                       <p className="text-xs text-muted-foreground mb-1">Shipped To</p>
@@ -305,55 +322,35 @@ function ProfileContent() {
                   <div>
                     <label className="block text-sm font-medium mb-2">Street Address</label>
                     <input type="text" value={addr.address}
-                      onChange={(e) => {
-                        const updated = [...addresses]
-                        updated[index].address = e.target.value
-                        setAddresses(updated)
-                      }}
+                      onChange={(e) => { const u = [...addresses]; u[index].address = e.target.value; setAddresses(u) }}
                       placeholder="123 Main St"
                       className="w-full px-3 py-2 rounded border border-border bg-background" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">City</label>
                     <input type="text" value={addr.city}
-                      onChange={(e) => {
-                        const updated = [...addresses]
-                        updated[index].city = e.target.value
-                        setAddresses(updated)
-                      }}
+                      onChange={(e) => { const u = [...addresses]; u[index].city = e.target.value; setAddresses(u) }}
                       placeholder="New York"
                       className="w-full px-3 py-2 rounded border border-border bg-background" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">State</label>
                     <input type="text" value={addr.state}
-                      onChange={(e) => {
-                        const updated = [...addresses]
-                        updated[index].state = e.target.value
-                        setAddresses(updated)
-                      }}
+                      onChange={(e) => { const u = [...addresses]; u[index].state = e.target.value; setAddresses(u) }}
                       placeholder="NY"
                       className="w-full px-3 py-2 rounded border border-border bg-background" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">Zip Code</label>
                     <input type="text" value={addr.zipCode}
-                      onChange={(e) => {
-                        const updated = [...addresses]
-                        updated[index].zipCode = e.target.value
-                        setAddresses(updated)
-                      }}
+                      onChange={(e) => { const u = [...addresses]; u[index].zipCode = e.target.value; setAddresses(u) }}
                       placeholder="10001"
                       className="w-full px-3 py-2 rounded border border-border bg-background" />
                   </div>
                 </div>
-                <Button className="mt-4 gap-2">
-                  <Save className="w-4 h-4" />
-                  Save Address
-                </Button>
+                <Button className="mt-4 gap-2"><Save className="w-4 h-4" />Save Address</Button>
               </div>
             ))}
-
             <Button variant="outline" className="w-full"
               onClick={() => setAddresses([...addresses, {
                 id: Date.now(), label: 'New Address',
@@ -361,6 +358,102 @@ function ProfileContent() {
               }])}>
               + Add New Address
             </Button>
+          </div>
+        )}
+
+        {/* TAB 4 — Become a Seller */}
+        {activeTab === 'seller' && (
+          <div className="max-w-xl mx-auto">
+
+            {/* Already approved */}
+            {user?.sellerStatus === 'approved' && (
+              <div className="border border-green-200 bg-green-50 rounded-lg p-8 text-center">
+                <Store className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                <h2 className="text-xl font-bold text-green-700 mb-2">You're an Approved Seller!</h2>
+                <p className="text-green-600 mb-6">You can now upload products and track your revenue.</p>
+                <Button onClick={() => router.push('/seller')}>Go to Seller Dashboard</Button>
+              </div>
+            )}
+
+            {/* Pending */}
+            {user?.sellerStatus === 'pending' && (
+              <div className="border border-yellow-200 bg-yellow-50 rounded-lg p-8 text-center">
+                <Clock className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                <h2 className="text-xl font-bold text-yellow-700 mb-2">Application Under Review</h2>
+                <p className="text-yellow-600">Your seller application is being reviewed by our team. We'll notify you once it's approved!</p>
+              </div>
+            )}
+
+            {/* Rejected */}
+            {user?.sellerStatus === 'rejected' && (
+              <div className="border border-red-200 bg-red-50 rounded-lg p-8 text-center mb-6">
+                <h2 className="text-xl font-bold text-red-700 mb-2">Application Rejected</h2>
+                <p className="text-red-600 mb-4">Your previous application was rejected. You can apply again below.</p>
+              </div>
+            )}
+
+            {/* Apply form — show if none or rejected */}
+            {(user?.sellerStatus === 'none' || user?.sellerStatus === 'rejected' || !user?.sellerStatus) && (
+              <div className="border border-border rounded-lg p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <Store className="w-6 h-6 text-primary" />
+                  <h2 className="text-xl font-bold">Become a Seller</h2>
+                </div>
+
+                {/* Benefits */}
+                <div className="grid grid-cols-1 gap-3 mb-6">
+                  {[
+                    '🛒 List your products on our platform',
+                    '📦 Manage your own inventory',
+                    '📊 Track your revenue & sales',
+                    '✅ Admin approval ensures quality',
+                  ].map((benefit, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 px-4 py-2 rounded-lg">
+                      {benefit}
+                    </div>
+                  ))}
+                </div>
+
+                <form onSubmit={handleSellerApply} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Shop Name *</label>
+                    <input
+                      type="text"
+                      value={sellerForm.shopName}
+                      onChange={(e) => setSellerForm({ ...sellerForm, shopName: e.target.value })}
+                      placeholder="e.g. Kartikey's Store"
+                      className="w-full px-3 py-2 rounded border border-border bg-background"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Shop Description</label>
+                    <textarea
+                      value={sellerForm.shopDescription}
+                      onChange={(e) => setSellerForm({ ...sellerForm, shopDescription: e.target.value })}
+                      placeholder="Tell us what you plan to sell..."
+                      rows={4}
+                      className="w-full px-3 py-2 rounded border border-border bg-background resize-none"
+                    />
+                  </div>
+
+                  {sellerMessage && (
+                    <p className={`text-sm px-4 py-2 rounded-lg ${
+                      sellerMessage.startsWith('✅') 
+                        ? 'bg-green-50 text-green-700' 
+                        : 'bg-red-50 text-red-700'
+                    }`}>
+                      {sellerMessage}
+                    </p>
+                  )}
+
+                  <Button type="submit" className="w-full gap-2" disabled={sellerLoading}>
+                    <Store className="w-4 h-4" />
+                    {sellerLoading ? 'Submitting...' : 'Apply to Become a Seller'}
+                  </Button>
+                </form>
+              </div>
+            )}
           </div>
         )}
       </div>

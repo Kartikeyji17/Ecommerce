@@ -31,4 +31,13 @@ const adminOnly = (req, res, next) => {
   }
 };
 
-module.exports = { protect, adminOnly };
+const sellerOnly = (req, res, next) => {
+  if (req.user && req.user.isSeller) {
+    next();
+  } else {
+    res.status(403);
+    throw new Error("Access denied - sellers only");
+  }
+};
+
+module.exports = { protect, adminOnly, sellerOnly };

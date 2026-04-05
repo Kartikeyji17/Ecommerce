@@ -29,6 +29,8 @@ const handler = NextAuth({
             name: data.name,
             isAdmin: data.isAdmin,
             backendToken: data.token, // ← store token here
+            isSeller: data.isSeller,           // ← ADD THIS
+            sellerStatus: data.sellerStatus,
           }
         } catch (error: any) {
           throw new Error(error.message || 'Login failed')
@@ -41,6 +43,8 @@ const handler = NextAuth({
       if (user) {
         token.id = user.id
         token.isAdmin = (user as any).isAdmin
+        token.isSeller = (user as any).isSeller        // ← add this
+        token.sellerStatus = (user as any).sellerStatus 
         token.backendToken = (user as any).backendToken // ← save to JWT
       }
       return token
@@ -49,6 +53,8 @@ const handler = NextAuth({
       if (session.user) {
         (session.user as any).id = token.id
         ;(session.user as any).isAdmin = token.isAdmin
+        ;(session.user as any).isSeller = token.isSeller        // ← add this
+        ;(session.user as any).sellerStatus = token.sellerStatus
         ;(session.user as any).backendToken = token.backendToken // ← expose in session
       }
       return session

@@ -4,14 +4,18 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   BarChart2, Package, ShoppingBag, Users, Plus, Pencil,
-  Trash2, Shield, ShieldOff, Loader2, TrendingUp, DollarSign
+  Trash2, Shield, ShieldOff, Loader2, TrendingUp, DollarSign,
+  Store, CheckCircle, XCircle, Clock
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/auth-context'
+import { ImageUpload } from '@/components/image-upload'
 
 interface Product {
   _id: string; name: string; price: number; category: string;
   countInStock: number; image: string; description: string;
+  isApproved: boolean;
+  seller?: { name: string; email: string; sellerInfo?: { shopName: string } };
 }
 interface Order {
   _id: string; totalPrice: number; isPaid: boolean;
@@ -20,7 +24,9 @@ interface Order {
   items: { name: string; quantity: number; price: number }[];
 }
 interface User {
-  _id: string; name: string; email: string; isAdmin: boolean; createdAt: string;
+  _id: string; name: string; email: string; isAdmin: boolean;
+  isSeller: boolean; sellerStatus: string; createdAt: string;
+  sellerInfo?: { shopName: string; shopDescription: string; appliedAt: string };
 }
 interface Analytics {
   totalUsers: number; totalProducts: number;
@@ -39,6 +45,8 @@ export default function AdminPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [sellerApplications, setSellerApplications] = useState<User[]>([])
+  const [pendingProducts, setPendingProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
   const [productModal, setProductModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
@@ -47,6 +55,8 @@ export default function AdminPage() {
   })
 
   const token = (user as any)?.backendToken
+  const API = process.env.NEXT_PUBLIC_API_URL
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   useEffect(() => {
     if (!user) { router.push('/auth/login'); return }
@@ -59,10 +69,9 @@ export default function AdminPage() {
     if (activeTab === 'products') fetchProducts()
     if (activeTab === 'orders') fetchOrders()
     if (activeTab === 'users') fetchUsers()
+    if (activeTab === 'sellers') fetchSellerApplications()
+    if (activeTab === 'pending') fetchPendingProducts()
   }, [activeTab, user])
-
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-  const API = process.env.NEXT_PUBLIC_API_URL
 
   const fetchAnalytics = async () => {
     setLoading(true)
@@ -98,6 +107,38 @@ export default function AdminPage() {
       const data = await res.json()
       if (res.ok) setUsers(data)
     } finally { setLoading(false) }
+  }
+
+  const fetchSellerApplications = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${API}/api/auth/seller-applications`, { headers })
+      const data = await res.json()
+      if (res.ok) setSellerApplications(data)
+    } finally { setLoading(false) }
+  }
+
+  const fetchPendingProducts = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${API}/api/products/admin/pending`, { headers })
+      const data = await res.json()
+      if (res.ok) setPendingProducts(data)
+    } finally { setLoading(false) }
+  }
+
+  const updateSellerStatus = async (id: string, status: string) => {
+    await fetch(`${API}/api/auth/seller-applications/${id}`, {
+      method: 'PUT', headers, body: JSON.stringify({ status })
+    })
+    fetchSellerApplications()
+  }
+
+  const handleApproveProduct = async (id: string, isApproved: boolean) => {
+    await fetch(`${API}/api/products/admin/${id}/approve`, {
+      method: 'PUT', headers, body: JSON.stringify({ isApproved })
+    })
+    fetchPendingProducts()
   }
 
   const openProductModal = (product?: Product) => {
@@ -151,11 +192,22 @@ export default function AdminPage() {
     fetchOrders()
   }
 
+  const getSellerStatusBadge = (status: string) => {
+    switch (status) {
+      case 'approved': return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Approved</span>
+      case 'pending': return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">Pending</span>
+      case 'rejected': return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Rejected</span>
+      default: return null
+    }
+  }
+
   const tabs = [
     { id: 'analytics', label: 'Analytics', icon: BarChart2 },
     { id: 'products', label: 'Products', icon: Package },
     { id: 'orders', label: 'Orders', icon: ShoppingBag },
     { id: 'users', label: 'Users', icon: Users },
+    { id: 'sellers', label: 'Seller Applications', icon: Store },
+    { id: 'pending', label: 'Pending Products', icon: Clock },
   ]
 
   if (!user?.isAdmin) return null
@@ -168,16 +220,14 @@ export default function AdminPage() {
             <h1 className="text-3xl font-bold">Admin Dashboard</h1>
             <p className="text-muted-foreground">Manage your store</p>
           </div>
-          <span className="px-3 py-1 bg-accent text-accent-foreground rounded-full text-sm font-semibold">
-            Admin
-          </span>
+          <span className="px-3 py-1 bg-accent text-accent-foreground rounded-full text-sm font-semibold">Admin</span>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-border mb-8">
+        <div className="flex gap-1 border-b border-border mb-8 overflow-x-auto">
           {tabs.map((tab) => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition -mb-px ${
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition -mb-px whitespace-nowrap ${
                 activeTab === tab.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}>
               <tab.icon className="w-4 h-4" />{tab.label}
@@ -194,7 +244,6 @@ export default function AdminPage() {
         {/* ANALYTICS TAB */}
         {activeTab === 'analytics' && !loading && analytics && (
           <div className="space-y-8">
-            {/* Stat Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
                 { label: 'Total Revenue', value: `$${analytics.totalRevenue.toFixed(2)}`, icon: DollarSign, color: 'text-green-600 bg-green-100' },
@@ -211,8 +260,6 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
-
-            {/* Monthly Revenue */}
             <div className="border border-border rounded-lg p-6">
               <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
                 <TrendingUp className="w-5 h-5" /> Monthly Revenue
@@ -227,8 +274,7 @@ export default function AdminPage() {
                     return (
                       <div key={`${m._id.year}-${m._id.month}`} className="flex-1 flex flex-col items-center gap-2">
                         <p className="text-xs font-semibold">${m.revenue.toFixed(0)}</p>
-                        <div className="w-full bg-primary rounded-t transition-all"
-                          style={{ height: `${Math.max(height, 4)}%` }} />
+                        <div className="w-full bg-primary rounded-t transition-all" style={{ height: `${Math.max(height, 4)}%` }} />
                         <p className="text-xs text-muted-foreground">{MONTHS[m._id.month - 1]}</p>
                       </div>
                     )
@@ -236,8 +282,6 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-
-            {/* Top Products */}
             <div className="border border-border rounded-lg p-6">
               <h2 className="text-lg font-bold mb-4">Top Selling Products</h2>
               {analytics.topProducts.length === 0 ? (
@@ -246,9 +290,7 @@ export default function AdminPage() {
                 <div className="space-y-3">
                   {analytics.topProducts.map((p, i) => (
                     <div key={p._id} className="flex items-center gap-4">
-                      <span className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">
-                        {i + 1}
-                      </span>
+                      <span className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">{i + 1}</span>
                       <p className="flex-1 font-medium">{p._id}</p>
                       <span className="text-sm text-muted-foreground">{p.totalSold} sold</span>
                     </div>
@@ -268,7 +310,6 @@ export default function AdminPage() {
                 <Plus className="w-4 h-4" /> Add Product
               </Button>
             </div>
-
             <div className="border border-border rounded-lg overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-secondary">
@@ -285,10 +326,7 @@ export default function AdminPage() {
                     <tr key={product._id} className="border-t border-border hover:bg-secondary/30">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          {product.image && (
-                            <img src={product.image} alt={product.name}
-                              className="w-10 h-10 rounded object-cover border border-border" />
-                          )}
+                          {product.image && <img src={product.image} alt={product.name} className="w-10 h-10 rounded object-cover border border-border" />}
                           <p className="font-medium">{product.name}</p>
                         </div>
                       </td>
@@ -297,22 +335,15 @@ export default function AdminPage() {
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                           product.countInStock > 10 ? 'bg-green-100 text-green-700' :
-                          product.countInStock > 0 ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-red-100 text-red-700'
+                          product.countInStock > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
                         }`}>
                           {product.countInStock > 0 ? `${product.countInStock} left` : 'Out of stock'}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => openProductModal(product)}
-                            className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => deleteProduct(product._id)}
-                            className="p-1.5 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <button onClick={() => openProductModal(product)} className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"><Pencil className="w-4 h-4" /></button>
+                          <button onClick={() => deleteProduct(product._id)} className="p-1.5 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </td>
                     </tr>
@@ -355,26 +386,19 @@ export default function AdminPage() {
                         </td>
                         <td className="px-4 py-3 font-bold">${order.totalPrice.toFixed(2)}</td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            order.isPaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          }`}>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${order.isPaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                             {order.isPaid ? 'Paid' : 'Unpaid'}
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <select
-                            value={order.status}
-                            onChange={(e) => updateOrderStatus(order._id, e.target.value)}
-                            className="text-xs border border-border rounded px-2 py-1 bg-background"
-                          >
+                          <select value={order.status} onChange={(e) => updateOrderStatus(order._id, e.target.value)}
+                            className="text-xs border border-border rounded px-2 py-1 bg-background">
                             {['pending','paid','processing','shipped','delivered','cancelled'].map(s => (
                               <option key={s} value={s}>{s}</option>
                             ))}
                           </select>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs">
-                          {new Date(order.createdAt).toLocaleDateString()}
-                        </td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs">{new Date(order.createdAt).toLocaleDateString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -405,19 +429,17 @@ export default function AdminPage() {
                       <td className="px-4 py-3 font-medium">{u.name}</td>
                       <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          u.isAdmin ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
-                        }`}>
-                          {u.isAdmin ? 'Admin' : 'User'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${u.isAdmin ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
+                            {u.isAdmin ? 'Admin' : 'User'}
+                          </span>
+                          {u.isSeller && <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Seller</span>}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs">
-                        {new Date(u.createdAt).toLocaleDateString()}
-                      </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">{new Date(u.createdAt).toLocaleDateString()}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => toggleAdmin(u._id)}
-                            title={u.isAdmin ? 'Remove admin' : 'Make admin'}
+                          <button onClick={() => toggleAdmin(u._id)} title={u.isAdmin ? 'Remove admin' : 'Make admin'}
                             className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground">
                             {u.isAdmin ? <ShieldOff className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
                           </button>
@@ -436,6 +458,132 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* SELLER APPLICATIONS TAB */}
+        {activeTab === 'sellers' && !loading && (
+          <div>
+            <p className="text-muted-foreground mb-6">{sellerApplications.length} applications</p>
+            {sellerApplications.length === 0 ? (
+              <div className="text-center py-16 border border-border rounded-lg">
+                <Store className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No seller applications yet</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {sellerApplications.map((applicant) => (
+                  <div key={applicant._id} className="border border-border rounded-lg p-6">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-bold">
+                            {applicant.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-semibold">{applicant.name}</p>
+                            <p className="text-sm text-muted-foreground">{applicant.email}</p>
+                          </div>
+                          {getSellerStatusBadge(applicant.sellerStatus)}
+                        </div>
+                        {applicant.sellerInfo && (
+                          <div className="ml-13 mt-3 space-y-1 bg-muted/40 rounded-lg px-4 py-3">
+                            <p className="text-sm font-semibold">🏪 {applicant.sellerInfo.shopName}</p>
+                            {applicant.sellerInfo.shopDescription && (
+                              <p className="text-sm text-muted-foreground">{applicant.sellerInfo.shopDescription}</p>
+                            )}
+                            {applicant.sellerInfo.appliedAt && (
+                              <p className="text-xs text-muted-foreground">
+                                Applied: {new Date(applicant.sellerInfo.appliedAt).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {/* Action buttons — only show if pending */}
+                      {applicant.sellerStatus === 'pending' && (
+                        <div className="flex gap-2">
+                          <Button size="sm" className="gap-2 bg-green-600 hover:bg-green-700"
+                            onClick={() => updateSellerStatus(applicant._id, 'approved')}>
+                            <CheckCircle className="w-4 h-4" /> Approve
+                          </Button>
+                          <Button size="sm" variant="destructive" className="gap-2"
+                            onClick={() => updateSellerStatus(applicant._id, 'rejected')}>
+                            <XCircle className="w-4 h-4" /> Reject
+                          </Button>
+                        </div>
+                      )}
+                      {/* Re-approve if rejected */}
+                      {applicant.sellerStatus === 'rejected' && (
+                        <Button size="sm" className="gap-2 bg-green-600 hover:bg-green-700"
+                          onClick={() => updateSellerStatus(applicant._id, 'approved')}>
+                          <CheckCircle className="w-4 h-4" /> Approve Anyway
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PENDING PRODUCTS TAB */}
+        {activeTab === 'pending' && !loading && (
+          <div>
+            <p className="text-muted-foreground mb-6">{pendingProducts.length} products awaiting approval</p>
+            {pendingProducts.length === 0 ? (
+              <div className="text-center py-16 border border-border rounded-lg">
+                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                <p className="font-semibold">All caught up!</p>
+                <p className="text-muted-foreground">No products pending approval</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {pendingProducts.map((product) => (
+                  <div key={product._id} className="border border-border rounded-lg p-6">
+                    <div className="flex flex-wrap items-start gap-4">
+                      {product.image && (
+                        <img src={product.image} alt={product.name}
+                          className="w-20 h-20 rounded-lg object-cover border border-border" />
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="font-semibold text-lg">{product.name}</p>
+                            <p className="text-sm text-muted-foreground">{product.category}</p>
+                            <p className="text-primary font-bold mt-1">${product.price}</p>
+                            {product.description && (
+                              <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{product.description}</p>
+                            )}
+                            {product.seller && (
+                              <div className="mt-3 flex items-center gap-2">
+                                <Store className="w-4 h-4 text-muted-foreground" />
+                                <p className="text-sm text-muted-foreground">
+                                  By <span className="font-medium text-foreground">
+                                    {product.seller.sellerInfo?.shopName || product.seller.name}
+                                  </span>
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button size="sm" className="gap-2 bg-green-600 hover:bg-green-700"
+                              onClick={() => handleApproveProduct(product._id, true)}>
+                              <CheckCircle className="w-4 h-4" /> Approve
+                            </Button>
+                            <Button size="sm" variant="destructive" className="gap-2"
+                              onClick={() => handleApproveProduct(product._id, false)}>
+                              <XCircle className="w-4 h-4" /> Reject
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Product Modal */}
@@ -444,41 +592,45 @@ export default function AdminPage() {
           <div className="bg-card border border-border rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-6">{editingProduct ? 'Edit Product' : 'Add Product'}</h2>
             <div className="space-y-4">
+
+              {/* Text fields only — no image URL input */}
               {[
                 { label: 'Product Name', key: 'name', type: 'text', placeholder: 'e.g. Classic Watch' },
                 { label: 'Price ($)', key: 'price', type: 'number', placeholder: '29.99' },
                 { label: 'Category', key: 'category', type: 'text', placeholder: 'e.g. Electronics' },
                 { label: 'Stock Count', key: 'countInStock', type: 'number', placeholder: '100' },
-                { label: 'Image URL', key: 'image', type: 'text', placeholder: 'https://...' },
               ].map((field) => (
                 <div key={field.key}>
                   <label className="block text-sm font-medium mb-2">{field.label}</label>
-                  <input type={field.type}
-                    value={(productForm as any)[field.key]}
+                  <input type={field.type} value={(productForm as any)[field.key]}
                     onChange={(e) => setProductForm({ ...productForm, [field.key]: e.target.value })}
                     placeholder={field.placeholder}
                     className="w-full px-3 py-2 rounded border border-border bg-background" />
                 </div>
               ))}
+
+              {/* Description */}
               <div>
                 <label className="block text-sm font-medium mb-2">Description</label>
-                <textarea
-                  value={productForm.description}
+                <textarea value={productForm.description}
                   onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                  placeholder="Product description..."
-                  rows={3}
+                  placeholder="Product description..." rows={3}
                   className="w-full px-3 py-2 rounded border border-border bg-background resize-none" />
               </div>
-              {productForm.image && (
-                <img src={productForm.image} alt="Preview"
-                  className="w-full h-32 object-cover rounded border border-border" />
-              )}
+
+              {/* Image Upload — replaces Image URL input */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Product Image</label>
+                <ImageUpload
+                  value={productForm.image}
+                  onChange={(url) => setProductForm({ ...productForm, image: url })}
+                />
+              </div>
+
             </div>
             <div className="flex gap-3 mt-6">
               <Button variant="outline" className="flex-1" onClick={() => setProductModal(false)}>Cancel</Button>
-              <Button className="flex-1" onClick={saveProduct}>
-                {editingProduct ? 'Save Changes' : 'Add Product'}
-              </Button>
+              <Button className="flex-1" onClick={saveProduct}>{editingProduct ? 'Save Changes' : 'Add Product'}</Button>
             </div>
           </div>
         </div>

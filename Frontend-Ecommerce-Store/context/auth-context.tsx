@@ -8,6 +8,8 @@ export interface User {
   email: string
   name: string
   isAdmin?: boolean
+  isSeller?: boolean
+  sellerStatus?: "none" | "pending" | "approved" | "rejected"
   backendToken?: string
 }
 
@@ -32,6 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: session.user.email!,
         name: session.user.name!,
         isAdmin: (session.user as any).isAdmin,
+        isSeller: (session.user as any).isSeller,
+        sellerStatus: (session.user as any).sellerStatus,
         backendToken: (session.user as any).backendToken,
       }
     : null
@@ -56,19 +60,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ name, email, password }),
       }
     )
-
     const data = await res.json()
-
     if (!res.ok) {
       throw new Error(data.message || 'Signup failed')
     }
-
     const result = await signIn('credentials', {
       email,
       password,
       redirect: false,
     })
-
     if (result?.error) {
       throw new Error(result.error)
     }

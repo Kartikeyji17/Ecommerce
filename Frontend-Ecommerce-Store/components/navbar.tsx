@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ShoppingCart, Menu, X, LogOut, User, Package, ChevronDown } from 'lucide-react'
+import { ShoppingCart, Menu, X, LogOut, User, Package, ChevronDown, Store } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useCart } from '@/context/cart-context'
 import { useAuth } from '@/context/auth-context'
@@ -15,7 +15,6 @@ export function Navbar() {
   const cartCount = items.reduce((sum, item) => sum + item.quantity, 0)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -30,6 +29,7 @@ export function Navbar() {
     <nav className="sticky top-0 z-50 w-full border-b border-border bg-background">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
+
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground">
@@ -49,7 +49,6 @@ export function Navbar() {
           <div className="flex items-center gap-3">
             {user ? (
               <div className="relative hidden sm:block" ref={dropdownRef}>
-                {/* Account Button */}
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-secondary transition"
@@ -68,32 +67,40 @@ export function Navbar() {
                     <div className="px-4 py-3 border-b border-border">
                       <p className="font-semibold text-sm">{user.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                      {/* Seller badge in dropdown */}
+                      {user.isSeller && (
+                        <span className="inline-flex items-center gap-1 mt-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                          <Store className="w-3 h-3" /> Verified Seller
+                        </span>
+                      )}
                     </div>
 
                     {/* Links */}
-                    <Link
-                      href="/profile"
-                      onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-secondary transition"
-                    >
+                    <Link href="/profile" onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-secondary transition">
                       <User className="w-4 h-4 text-muted-foreground" />
                       My Profile
                     </Link>
-                    <Link
-                      href="/profile?tab=orders"
-                      onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-secondary transition"
-                    >
+
+                    <Link href="/profile?tab=orders" onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-secondary transition">
                       <Package className="w-4 h-4 text-muted-foreground" />
                       My Orders
                     </Link>
 
+                    {/* Seller Dashboard — only for approved sellers */}
+                    {user.isSeller && (
+                      <Link href="/seller" onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-secondary transition">
+                        <Store className="w-4 h-4 text-muted-foreground" />
+                        Seller Dashboard
+                      </Link>
+                    )}
+
+                    {/* Admin Dashboard */}
                     {user.isAdmin && (
-                      <Link
-                        href="/admin"
-                        onClick={() => setIsDropdownOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-secondary transition"
-                      >
+                      <Link href="/admin" onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-secondary transition">
                         <span className="text-xs font-bold px-1.5 py-0.5 bg-accent text-accent-foreground rounded">Admin</span>
                         Dashboard
                       </Link>
@@ -154,23 +161,38 @@ export function Navbar() {
                 <div className="border-t border-border pt-3 mt-2 px-3 py-2">
                   <p className="font-semibold text-sm">{user.name}</p>
                   <p className="text-xs text-muted-foreground">{user.email}</p>
+                  {user.isSeller && (
+                    <span className="inline-flex items-center gap-1 mt-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                      <Store className="w-3 h-3" /> Verified Seller
+                    </span>
+                  )}
                 </div>
+
                 <Link href="/profile" onClick={() => setIsMenuOpen(false)}
                   className="flex items-center gap-2 px-3 py-2 hover:bg-secondary rounded-lg text-sm">
                   <User className="w-4 h-4" /> My Profile
                 </Link>
+
                 <Link href="/profile?tab=orders" onClick={() => setIsMenuOpen(false)}
                   className="flex items-center gap-2 px-3 py-2 hover:bg-secondary rounded-lg text-sm">
                   <Package className="w-4 h-4" /> My Orders
                 </Link>
+
+                {/* Seller Dashboard mobile */}
+                {user.isSeller && (
+                  <Link href="/seller" onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-secondary rounded-lg text-sm">
+                    <Store className="w-4 h-4" /> Seller Dashboard
+                  </Link>
+                )}
+
                 {user.isAdmin && (
                   <Link href="/admin" onClick={() => setIsMenuOpen(false)}
                     className="block px-3 py-2 hover:bg-secondary rounded-lg text-sm">Admin Dashboard</Link>
                 )}
-                <button
-                  onClick={() => { logout(); setIsMenuOpen(false) }}
-                  className="flex items-center gap-2 px-3 py-2 text-destructive hover:bg-destructive/10 rounded-lg text-sm w-full"
-                >
+
+                <button onClick={() => { logout(); setIsMenuOpen(false) }}
+                  className="flex items-center gap-2 px-3 py-2 text-destructive hover:bg-destructive/10 rounded-lg text-sm w-full">
                   <LogOut className="w-4 h-4" /> Logout
                 </button>
               </>
