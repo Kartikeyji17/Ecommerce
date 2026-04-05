@@ -15,6 +15,7 @@ interface ProductCardProps {
     image: string
     category?: string
     rating?: number
+    countInStock?: number 
   }
 }
 
@@ -100,15 +101,20 @@ export function ProductCard({ product }: ProductCardProps) {
             <p className="text-lg font-bold text-primary">
               ${product.price.toFixed(2)}
             </p>
+            {product.countInStock === 0 && (
+              <p className="text-xs text-destructive font-medium">Out of stock</p>
+            )}
           </div>
           <Button
             size="sm"
             onClick={handleAddToCart}
-            disabled={isAdding}
+            disabled={isAdding || product.countInStock === 0}
             className="gap-2"
           >
             <ShoppingCart className="w-4 h-4" />
-            <span className="hidden sm:inline">Add</span>
+            <span className="hidden sm:inline">
+              {product.countInStock === 0 ? 'Sold Out' : 'Add'}
+            </span>
           </Button>
         </div>
       </div>
