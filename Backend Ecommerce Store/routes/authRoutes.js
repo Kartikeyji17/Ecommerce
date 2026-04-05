@@ -2,7 +2,7 @@ const express = require("express");
 const { 
   loginUser, registerUser, getUsers, toggleAdmin, deleteUser, 
   getAnalytics, applyForSeller, getSellerApplications, 
-  updateSellerStatus, getSellerAnalytics 
+  updateSellerStatus, getSellerAnalytics,googleLogin
 } = require("../controllers/authController");
 const { protect, adminOnly, sellerOnly } = require("../middleware/authMiddleware");
 
@@ -25,5 +25,7 @@ router.put("/seller-applications/:id", protect, adminOnly, updateSellerStatus);
 // Seller
 router.post("/apply-seller", protect, applyForSeller);
 router.get("/seller-analytics", protect, sellerOnly, getSellerAnalytics);
+
+router.post("/google-login", googleLogin)
 
 module.exports = router;

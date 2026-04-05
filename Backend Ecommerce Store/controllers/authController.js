@@ -154,8 +154,35 @@ const getSellerAnalytics = asyncHandler(async (req, res) => {
   });
 });
 
+// GOOGLE LOGIN / REGISTER
+const googleLogin = asyncHandler(async (req, res) => {
+  const { name, email, googleId } = req.body
+
+  let user = await User.findOne({ email })
+
+  if (!user) {
+    // Auto register new Google user (no password)
+    user = await User.create({
+      name,
+      email,
+      password: googleId, // won't be used for login
+      isAdmin: false,
+    })
+  }
+
+  res.json({
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    isAdmin: user.isAdmin,
+    isSeller: user.isSeller,
+    sellerStatus: user.sellerStatus,
+    token: generateToken(user._id)
+  })
+})
+
 module.exports = { 
   registerUser, loginUser, getUsers, toggleAdmin, deleteUser, 
   getAnalytics, applyForSeller, getSellerApplications, 
-  updateSellerStatus, getSellerAnalytics 
+  updateSellerStatus, getSellerAnalytics, googleLogin
 };
