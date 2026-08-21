@@ -1,0 +1,36 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: ecommerce-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build: ./Backend Ecommerce Store
+    container_name: ecommerce-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./Backend Ecommerce Store/.env
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/ecommerce
+      - NODE_ENV=production
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+
+  frontend:
+    build: ./Frontend-Ecommerce-Store
+    container_name: ecommerce-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./Frontend-Ecommerce-Store/.env.local
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  mongo_data:

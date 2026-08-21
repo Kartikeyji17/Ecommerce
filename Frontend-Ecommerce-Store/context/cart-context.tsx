@@ -3,13 +3,8 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
 
-export interface CartItem {
-  id: string
-  name: string
-  price: number
-  quantity: number
-  image: string
-}
+import { CartItem, computeTotal } from '@/lib/cart-utils'
+export type { CartItem }
 
 interface CartState {
   items: CartItem[]
@@ -28,10 +23,6 @@ const CART_STORAGE_KEY = 'ecommerce-cart'
 const initialState: CartState = {
   items: [],
   totalPrice: 0,
-}
-
-function computeTotal(items: CartItem[]) {
-  return items.reduce((sum, item) => sum + item.price * item.quantity, 0)
 }
 
 function cartReducer(state: CartState, action: CartAction): CartState {

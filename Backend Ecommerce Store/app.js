@@ -7,7 +7,6 @@ const productRoutes = require("./routes/productRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const cartRoutes = require("./routes/cartRoutes");
-const profileRoutes = require("./routes/profileRoutes");
 const healthRoutes = require("./routes/healthRoutes");
 const { stripeWebhook } = require("./controllers/paymentController");
 const { errorHandler } = require("./middleware/errorMiddleware");
@@ -40,7 +39,6 @@ app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/cart", cartRoutes);
-app.use("/api/users", profileRoutes);
 
 app.get("/", (req, res) => {
   res.send("API Running");
