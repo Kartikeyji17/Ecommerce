@@ -16,7 +16,7 @@ const productSchema = new mongoose.Schema({
     ref: "User", 
     default: null 
   },
-  isApproved: { type: Boolean, default: false },
+  isApproved: { type: Boolean, default: false, index: true },
   approvedAt: { type: Date }
 
 }, { timestamps: true });

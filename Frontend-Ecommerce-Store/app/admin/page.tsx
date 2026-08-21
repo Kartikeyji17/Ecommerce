@@ -39,7 +39,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 
 export default function AdminPage() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
   const [activeTab, setActiveTab] = useState('analytics')
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
   const [products, setProducts] = useState<Product[]>([])
@@ -59,9 +59,10 @@ export default function AdminPage() {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   useEffect(() => {
+    if (isLoading) return
     if (!user) { router.push('/auth/login'); return }
     if (!user.isAdmin) { router.push('/'); return }
-  }, [user])
+  }, [user, isLoading])
 
   useEffect(() => {
     if (!user?.isAdmin) return

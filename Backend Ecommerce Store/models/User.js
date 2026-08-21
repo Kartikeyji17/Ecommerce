@@ -1,8 +1,20 @@
 const mongoose = require("mongoose");
 
+const addressSchema = new mongoose.Schema({
+  label: { type: String, default: "Home" }, // e.g. "Home", "Work"
+  firstName: String,
+  lastName: String,
+  address: String,
+  city: String,
+  state: String,
+  zipCode: String,
+  phone: String,
+  isDefault: { type: Boolean, default: false },
+});
+
 const userSchema = new mongoose.Schema({
   name: String,
-  email: { type: String, unique: true },
+  email: { type: String, unique: true, index: true },
   password: String,
   isAdmin: { type: Boolean, default: false },
 
@@ -17,7 +29,9 @@ const userSchema = new mongoose.Schema({
     shopName: { type: String, default: "" },
     shopDescription: { type: String, default: "" },
     appliedAt: { type: Date }
-  }
+  },
+
+  addresses: [addressSchema],
 
 }, { timestamps: true });
 

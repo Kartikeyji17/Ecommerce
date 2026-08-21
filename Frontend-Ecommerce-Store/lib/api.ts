@@ -169,3 +169,56 @@ export const sellerDeleteProduct = async (id: string, token: string) => {
   });
   return res.json();
 };
+
+// ==================== PROFILE ====================
+export const updateProfile = async (data: any, token: string) => {
+  const res = await fetch(`${API}/api/auth/profile`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+};
+
+export const changePassword = async (data: any, token: string) => {
+  const res = await fetch(`${API}/api/auth/change-password`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+};
+
+// ==================== ADDRESSES ====================
+export const getAddresses = async (token: string) => {
+  const res = await fetch(`${API}/api/auth/addresses`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
+};
+
+export const createAddress = async (data: any, token: string) => {
+  const res = await fetch(`${API}/api/auth/addresses`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+};
+
+export const updateAddress = async (id: string, data: any, token: string) => {
+  const res = await fetch(`${API}/api/auth/addresses/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+};
+
+export const deleteAddress = async (id: string, token: string) => {
+  const res = await fetch(`${API}/api/auth/addresses/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
+};

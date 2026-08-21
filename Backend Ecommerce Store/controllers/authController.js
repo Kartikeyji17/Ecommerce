@@ -181,8 +181,73 @@ const googleLogin = asyncHandler(async (req, res) => {
   })
 })
 
+// UPDATE PROFILE
+const updateProfile = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+  if (!user) { res.status(404); throw new Error("User not found"); }
+  user.name = req.body.name ?? user.name;
+  user.email = req.body.email ?? user.email;
+  await user.save();
+  res.json({
+    _id: user._id, name: user.name, email: user.email,
+    isAdmin: user.isAdmin, isSeller: user.isSeller, sellerStatus: user.sellerStatus
+  });
+});
+
+// CHANGE PASSWORD
+const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const user = await User.findById(req.user._id);
+  if (!user) { res.status(404); throw new Error("User not found"); }
+  const match = await bcrypt.compare(currentPassword, user.password);
+  if (!match) { res.status(401); throw new Error("Current password is incorrect"); }
+  user.password = await bcrypt.hash(newPassword, 10);
+  await user.save();
+  res.json({ message: "Password updated successfully" });
+});
+
+// GET ADDRESSES
+const getAddresses = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+  if (!user) { res.status(404); throw new Error("User not found"); }
+  res.json(user.addresses || []);
+});
+
+// CREATE ADDRESS
+const createAddress = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+  if (!user) { res.status(404); throw new Error("User not found"); }
+  if (!user.addresses) user.addresses = [];
+  user.addresses.push(req.body);
+  await user.save();
+  res.json(user.addresses);
+});
+
+// UPDATE ADDRESS
+const updateAddress = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+  if (!user) { res.status(404); throw new Error("User not found"); }
+  const addr = user.addresses.id(req.params.id);
+  if (!addr) { res.status(404); throw new Error("Address not found"); }
+  Object.assign(addr, req.body);
+  await user.save();
+  res.json(user.addresses);
+});
+
+// DELETE ADDRESS
+const deleteAddress = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+  if (!user) { res.status(404); throw new Error("User not found"); }
+  const addr = user.addresses.id(req.params.id);
+  if (!addr) { res.status(404); throw new Error("Address not found"); }
+  addr.deleteOne();
+  await user.save();
+  res.json(user.addresses);
+});
+
 module.exports = { 
   registerUser, loginUser, getUsers, toggleAdmin, deleteUser, 
   getAnalytics, applyForSeller, getSellerApplications, 
-  updateSellerStatus, getSellerAnalytics, googleLogin
+  updateSellerStatus, getSellerAnalytics, googleLogin,
+  updateProfile, changePassword, getAddresses, createAddress, updateAddress, deleteAddress
 };

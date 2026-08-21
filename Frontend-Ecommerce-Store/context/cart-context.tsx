@@ -1,6 +1,7 @@
 'use client'
 
-import React, { createContext, useContext, useReducer, ReactNode } from 'react'
+import React, { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react'
+import { useSession } from 'next-auth/react'
 
 export interface CartItem {
   id: string
@@ -16,58 +17,51 @@ interface CartState {
 }
 
 type CartAction =
+  | { type: 'HYDRATE'; payload: CartState }
   | { type: 'ADD_ITEM'; payload: CartItem }
   | { type: 'REMOVE_ITEM'; payload: string }
   | { type: 'UPDATE_QUANTITY'; payload: { id: string; quantity: number } }
   | { type: 'CLEAR_CART' }
+
+const CART_STORAGE_KEY = 'ecommerce-cart'
 
 const initialState: CartState = {
   items: [],
   totalPrice: 0,
 }
 
+function computeTotal(items: CartItem[]) {
+  return items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+}
+
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
+    case 'HYDRATE':
+      return action.payload
     case 'ADD_ITEM': {
       const existingItem = state.items.find((item) => item.id === action.payload.id)
-      if (existingItem) {
-        return {
-          ...state,
-          items: state.items.map((item) =>
+      const items = existingItem
+        ? state.items.map((item) =>
             item.id === action.payload.id
               ? { ...item, quantity: item.quantity + action.payload.quantity }
               : item
-          ),
-          totalPrice: state.totalPrice + action.payload.price * action.payload.quantity,
-        }
-      }
-      return {
-        ...state,
-        items: [...state.items, action.payload],
-        totalPrice: state.totalPrice + action.payload.price * action.payload.quantity,
-      }
+          )
+        : [...state.items, action.payload]
+      return { items, totalPrice: computeTotal(items) }
     }
     case 'REMOVE_ITEM': {
-      const item = state.items.find((item) => item.id === action.payload)
-      return {
-        ...state,
-        items: state.items.filter((item) => item.id !== action.payload),
-        totalPrice: state.totalPrice - (item ? item.price * item.quantity : 0),
-      }
+      const items = state.items.filter((item) => item.id !== action.payload)
+      return { items, totalPrice: computeTotal(items) }
     }
     case 'UPDATE_QUANTITY': {
-      const item = state.items.find((item) => item.id === action.payload.id)
-      if (!item) return state
-      const priceDifference = item.price * (action.payload.quantity - item.quantity)
-      return {
-        ...state,
-        items: state.items.map((item) =>
+      const items = state.items
+        .map((item) =>
           item.id === action.payload.id
             ? { ...item, quantity: action.payload.quantity }
             : item
-        ),
-        totalPrice: state.totalPrice + priceDifference,
-      }
+        )
+        .filter((item) => item.quantity > 0)
+      return { items, totalPrice: computeTotal(items) }
     }
     case 'CLEAR_CART':
       return initialState
@@ -87,6 +81,74 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, initialState)
+  const { data: session } = useSession()
+  const hydrated = useRef(false)
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const backendToken = (session?.user as any)?.backendToken as string | undefined
+
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CART_STORAGE_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved) as CartState
+        if (parsed.items) dispatch({ type: 'HYDRATE', payload: parsed })
+      }
+    } catch {
+      /* ignore corrupt cart */
+    }
+    hydrated.current = true
+  }, [])
+
+  // Merge Redis cart when user logs in
+  useEffect(() => {
+    if (!backendToken || !hydrated.current) return
+
+    const syncFromServer = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/cart`, {
+          headers: { Authorization: `Bearer ${backendToken}` },
+        })
+        const data = await res.json()
+        if (res.ok && Array.isArray(data.items) && data.items.length > 0) {
+          dispatch({
+            type: 'HYDRATE',
+            payload: { items: data.items, totalPrice: computeTotal(data.items) },
+          })
+        }
+      } catch {
+        /* Redis may be unavailable */
+      }
+    }
+
+    syncFromServer()
+  }, [backendToken])
+
+  // Persist to localStorage + Redis on change
+  useEffect(() => {
+    if (!hydrated.current) return
+
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(state))
+
+    if (!backendToken) return
+
+    if (syncTimer.current) clearTimeout(syncTimer.current)
+    syncTimer.current = setTimeout(async () => {
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/cart`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${backendToken}`,
+          },
+          body: JSON.stringify({ items: state.items }),
+        })
+      } catch {
+        /* best-effort sync */
+      }
+    }, 500)
+  }, [state, backendToken])
 
   const addItem = (item: CartItem) => dispatch({ type: 'ADD_ITEM', payload: item })
   const removeItem = (id: string) => dispatch({ type: 'REMOVE_ITEM', payload: id })
@@ -97,7 +159,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'UPDATE_QUANTITY', payload: { id, quantity } })
     }
   }
-  const clearCart = () => dispatch({ type: 'CLEAR_CART' })
+  const clearCart = () => {
+    dispatch({ type: 'CLEAR_CART' })
+    localStorage.removeItem(CART_STORAGE_KEY)
+    if (backendToken) {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/cart`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${backendToken}` },
+      }).catch(() => {})
+    }
+  }
 
   return (
     <CartContext.Provider value={{ ...state, addItem, removeItem, updateQuantity, clearCart }}>

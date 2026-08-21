@@ -1,30 +1,35 @@
 const Order = require("../models/Order");
 const asyncHandler = require("../middleware/asyncHandler");
+const { buildOrderFromItems } = require("../utils/orderPricing");
+const fulfillOrder = require("../utils/fulfillOrder");
+const { getRedis } = require("../config/redis");
 
-// Create order
+const invalidateProductCache = async () => {
+  const redis = getRedis();
+  if (redis) await redis.del("products:all");
+};
+
+// Create order with server-side pricing
 const createOrder = asyncHandler(async (req, res) => {
-  const { items, shippingAddress, shippingMethod, subtotal, shippingCost, tax, totalPrice } = req.body;
+  const { items, shippingAddress, shippingMethod } = req.body;
 
-  if (!items || items.length === 0) {
-    res.status(400);
-    throw new Error("No items in order");
-  }
+  const pricing = await buildOrderFromItems(items, shippingMethod);
 
   const order = await Order.create({
     user: req.user._id,
-    items,
+    items: pricing.items,
     shippingAddress,
-    shippingMethod,
-    subtotal,
-    shippingCost,
-    tax,
-    totalPrice,
+    shippingMethod: shippingMethod || "standard",
+    subtotal: pricing.subtotal,
+    shippingCost: pricing.shippingCost,
+    tax: pricing.tax,
+    totalPrice: pricing.totalPrice,
   });
 
   res.status(201).json(order);
 });
 
-// Mark order as paid
+// Mark order as paid (client fallback — webhook is source of truth)
 const updateOrderToPaid = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
 
@@ -33,12 +38,13 @@ const updateOrderToPaid = asyncHandler(async (req, res) => {
     throw new Error("Order not found");
   }
 
-  order.isPaid = true;
-  order.paidAt = Date.now();
-  order.status = 'paid';
-  order.stripePaymentIntentId = req.body.paymentIntentId;
+  if (order.user.toString() !== req.user._id.toString()) {
+    res.status(401);
+    throw new Error("Not authorized");
+  }
 
-  const updatedOrder = await order.save();
+  const updatedOrder = await fulfillOrder(order._id, req.body.paymentIntentId);
+  await invalidateProductCache();
   res.json(updatedOrder);
 });
 
@@ -57,7 +63,6 @@ const getOrderById = asyncHandler(async (req, res) => {
     throw new Error("Order not found");
   }
 
-  // Make sure user owns this order
   if (order.user._id.toString() !== req.user._id.toString()) {
     res.status(401);
     throw new Error("Not authorized");
@@ -66,4 +71,4 @@ const getOrderById = asyncHandler(async (req, res) => {
   res.json(order);
 });
 
-module.exports = { createOrder, updateOrderToPaid, getMyOrders, getOrderById };
+module.exports = { createOrder, updateOrderToPaid, getMyOrders, getOrderById, invalidateProductCache };

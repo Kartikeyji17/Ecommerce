@@ -1,11 +1,35 @@
 const Product = require("../models/Product");
 const asyncHandler = require("../middleware/asyncHandler");
+const { getRedis } = require("../config/redis");
+const { invalidateProductCache } = require("./orderController");
+
+const PRODUCTS_CACHE_KEY = "products:all";
+const CACHE_TTL = 300;
+
+const cacheProducts = async (products) => {
+  const redis = getRedis();
+  if (redis) {
+    await redis.setex(PRODUCTS_CACHE_KEY, CACHE_TTL, JSON.stringify(products));
+  }
+};
+
+const getCachedProducts = async () => {
+  const redis = getRedis();
+  if (!redis) return null;
+  const cached = await redis.get(PRODUCTS_CACHE_KEY);
+  return cached ? JSON.parse(cached) : null;
+};
 
 // Get all products (only approved ones for public)
 const getProducts = asyncHandler(async (req, res) => {
-  // const products = await Product.find({ isApproved: true }).populate("seller", "name sellerInfo");
-  const products = await Product.find({$or: [{ isApproved: true }, { seller: null }]}).populate("seller", "name sellerInfo");
-  
+  const cached = await getCachedProducts();
+  if (cached) return res.json(cached);
+
+  const products = await Product.find({
+    $or: [{ isApproved: true }, { seller: null }],
+  }).populate("seller", "name sellerInfo");
+
+  await cacheProducts(products);
   res.json(products);
 });
 
@@ -19,11 +43,11 @@ const getProductById = asyncHandler(async (req, res) => {
 // Create product (admin)
 const createProduct = asyncHandler(async (req, res) => {
   const { name, price, description, image, category, countInStock } = req.body;
-  // Admin products are auto-approved
-  const product = await Product.create({ 
+  const product = await Product.create({
     name, price, description, image, category, countInStock,
-    isApproved: true
+    isApproved: true,
   });
+  await invalidateProductCache();
   res.status(201).json(product);
 });
 
@@ -39,6 +63,7 @@ const updateProduct = asyncHandler(async (req, res) => {
   product.category = category ?? product.category;
   product.countInStock = countInStock ?? product.countInStock;
   const updated = await product.save();
+  await invalidateProductCache();
   res.json(updated);
 });
 
@@ -47,6 +72,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
   if (!product) { res.status(404); throw new Error("Product not found"); }
   await product.deleteOne();
+  await invalidateProductCache();
   res.json({ message: "Product deleted" });
 });
 
@@ -56,8 +82,9 @@ const sellerCreateProduct = asyncHandler(async (req, res) => {
   const product = await Product.create({
     name, price, description, image, category, countInStock,
     seller: req.user._id,
-    isApproved: false  // needs admin approval
+    isApproved: false,
   });
+  await invalidateProductCache();
   res.status(201).json(product);
 });
 
@@ -81,8 +108,9 @@ const sellerUpdateProduct = asyncHandler(async (req, res) => {
   product.image = image ?? product.image;
   product.category = category ?? product.category;
   product.countInStock = countInStock ?? product.countInStock;
-  product.isApproved = false; // re-approval needed after edit
+  product.isApproved = false;
   const updated = await product.save();
+  await invalidateProductCache();
   res.json(updated);
 });
 
@@ -94,6 +122,7 @@ const sellerDeleteProduct = asyncHandler(async (req, res) => {
     res.status(403); throw new Error("Not authorized to delete this product");
   }
   await product.deleteOne();
+  await invalidateProductCache();
   res.json({ message: "Product deleted" });
 });
 
@@ -112,11 +141,12 @@ const approveProduct = asyncHandler(async (req, res) => {
   product.isApproved = isApproved;
   product.approvedAt = isApproved ? new Date() : null;
   await product.save();
+  await invalidateProductCache();
   res.json({ message: `Product ${isApproved ? "approved" : "rejected"}`, product });
 });
 
-module.exports = { 
+module.exports = {
   getProducts, getProductById, createProduct, updateProduct, deleteProduct,
-  sellerCreateProduct, getSellerProducts, sellerUpdateProduct, 
-  sellerDeleteProduct, getPendingProducts, approveProduct
+  sellerCreateProduct, getSellerProducts, sellerUpdateProduct,
+  sellerDeleteProduct, getPendingProducts, approveProduct,
 };

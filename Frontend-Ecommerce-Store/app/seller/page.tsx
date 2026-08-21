@@ -29,7 +29,7 @@ interface SellerAnalytics {
 
 export default function SellerDashboard() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
   const [activeTab, setActiveTab] = useState('overview')
   const [products, setProducts] = useState<Product[]>([])
   const [analytics, setAnalytics] = useState<SellerAnalytics | null>(null)
@@ -45,9 +45,10 @@ export default function SellerDashboard() {
   const token = (user as any)?.backendToken
 
   useEffect(() => {
+    if (isLoading) return
     if (!user) { router.push('/auth/login'); return }
     if (user.sellerStatus !== 'approved') { router.push('/profile?tab=seller'); return }
-  }, [user])
+  }, [user, isLoading])
 
   useEffect(() => {
     if (user?.sellerStatus !== 'approved') return

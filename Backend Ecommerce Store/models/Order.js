@@ -1,9 +1,10 @@
 const mongoose = require("mongoose");
 
 const orderSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
   items: [
     {
+      product: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
       name: { type: String, required: true },
       price: { type: Number, required: true },
       quantity: { type: Number, required: true },
@@ -26,7 +27,7 @@ const orderSchema = new mongoose.Schema({
   totalPrice: { type: Number, required: true },
   isPaid: { type: Boolean, default: false },
   paidAt: { type: Date },
-  stripePaymentIntentId: { type: String },
+  stripePaymentIntentId: { type: String, index: true },
   status: {
     type: String,
     enum: ['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'],

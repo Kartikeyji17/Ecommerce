@@ -1,11 +1,24 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { User, Package, MapPin, Save, Eye, EyeOff, CheckCircle2, Clock, Truck, Store } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/auth-context'
-import { applyForSeller } from '@/lib/api'
+import { applyForSeller, updateProfile, changePassword, getAddresses, createAddress, updateAddress, deleteAddress } from '@/lib/api'
+
+interface Address {
+  _id: string
+  label: string
+  firstName: string
+  lastName: string
+  address: string
+  city: string
+  state: string
+  zipCode: string
+  phone: string
+  isDefault: boolean
+}
 
 interface Order {
   _id: string
@@ -27,7 +40,7 @@ interface Order {
 function ProfileContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
 
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'info')
   const [orders, setOrders] = useState<Order[]>([])
@@ -51,14 +64,33 @@ function ProfileContent() {
     confirmPassword: '',
   })
 
-  const [addresses, setAddresses] = useState([
-    { id: 1, label: 'Home', address: '', city: '', state: '', zipCode: '', isDefault: true }
-  ])
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState(false)
+  const [infoError, setInfoError] = useState('')
+
+  const [addresses, setAddresses] = useState<Address[]>([])
+  const [addressesLoading, setAddressesLoading] = useState(false)
+  const [addressMessage, setAddressMessage] = useState('')
 
   useEffect(() => {
+    if (isLoading) return
     if (!user) { router.push('/auth/login'); return }
+    setInfoForm({ name: user.name || '', email: user.email || '' })
     if (activeTab === 'orders') fetchOrders()
-  }, [activeTab, user])
+    if (activeTab === 'addresses') fetchAddresses()
+  }, [activeTab, user, isLoading])
+
+  const fetchAddresses = async () => {
+    setAddressesLoading(true)
+    try {
+      const data = await getAddresses(user?.backendToken!)
+      if (Array.isArray(data)) setAddresses(data)
+    } catch {
+      setAddressMessage('Failed to load addresses')
+    } finally {
+      setAddressesLoading(false)
+    }
+  }
 
   const fetchOrders = async () => {
     setOrdersLoading(true)
@@ -77,8 +109,68 @@ function ProfileContent() {
 
   const handleSaveInfo = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSaveSuccess(true)
-    setTimeout(() => setSaveSuccess(false), 3000)
+    setInfoError('')
+    try {
+      await updateProfile({ name: infoForm.name }, user?.backendToken!)
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (err: any) {
+      setInfoError(err.message || 'Failed to save profile')
+    }
+  }
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordError('')
+    setPasswordSuccess(false)
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('New passwords do not match')
+      return
+    }
+    try {
+      await changePassword(
+        { currentPassword: passwordForm.currentPassword, newPassword: passwordForm.newPassword },
+        user?.backendToken!
+      )
+      setPasswordSuccess(true)
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+    } catch (err: any) {
+      setPasswordError(err.message || 'Failed to update password')
+    }
+  }
+
+  const handleSaveAddress = async (addr: Address, index: number) => {
+  setAddressMessage('')
+  if (!addr.firstName.trim() || !addr.lastName.trim() || !addr.address.trim() || !addr.city.trim() || !addr.state.trim() || !addr.zipCode.trim() || !addr.phone.trim()) {
+    setAddressMessage('Please fill in all fields before saving')
+    return
+  }
+  try {
+    if (addr._id.startsWith('temp-')) {
+      const { _id, ...addrData } = addr
+      const updatedList = await createAddress(addrData, user?.backendToken!)
+      setAddresses(updatedList)
+    } else {
+      const updatedList = await updateAddress(addr._id, addr, user?.backendToken!)
+      setAddresses(updatedList)
+    }
+    setAddressMessage('Address saved')
+  } catch (err: any) {
+    setAddressMessage(err.message || 'Failed to save address')
+  }
+}
+
+  const handleDeleteAddress = async (id: string) => {
+    if (id.startsWith('temp-')) {
+      setAddresses(addresses.filter(a => a._id !== id))
+      return
+    }
+    try {
+      await deleteAddress(id, user?.backendToken!)
+      setAddresses(addresses.filter(a => a._id !== id))
+    } catch (err: any) {
+      setAddressMessage(err.message || 'Failed to delete address')
+    }
   }
 
   const handleSellerApply = async (e: React.FormEvent) => {
@@ -134,6 +226,16 @@ function ProfileContent() {
     if (status === 'rejected') return <span className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">❌ Application Rejected</span>
     return null
   }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-muted-foreground">Loading profile...</p>
+      </div>
+    )
+  }
+
+  if (!user) return null
 
   return (
     <div className="min-h-screen bg-background">
@@ -304,57 +406,95 @@ function ProfileContent() {
           </div>
         )}
 
-        {/* TAB 3 — Saved Addresses */}
+                {/* TAB 3 — Saved Addresses */}
         {activeTab === 'addresses' && (
           <div className="space-y-4">
-            {addresses.map((addr, index) => (
-              <div key={addr.id} className="border border-border rounded-lg p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-primary" />
-                    <span className="font-semibold">{addr.label}</span>
-                    {addr.isDefault && (
-                      <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">Default</span>
-                    )}
+            {addressesLoading ? (
+              <div className="text-center py-12 text-muted-foreground">Loading addresses...</div>
+            ) : (
+              addresses.map((addr, index) => (
+                <div key={addr._id} className="border border-border rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-primary" />
+                      <input type="text" value={addr.label}
+                        onChange={(e) => { const u = [...addresses]; u[index].label = e.target.value; setAddresses(u) }}
+                        placeholder="Home / Work"
+                        className="font-semibold px-2 py-1 rounded border border-border bg-background w-40" />
+                      {addr.isDefault && (
+                        <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">Default</span>
+                      )}
+                    </div>
+                  </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">First Name</label>
+                      <input type="text" value={addr.firstName}
+                        onChange={(e) => { const u = [...addresses]; u[index].firstName = e.target.value; setAddresses(u) }}
+                        placeholder="John"
+                        className="w-full px-3 py-2 rounded border border-border bg-background" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Last Name</label>
+                      <input type="text" value={addr.lastName}
+                        onChange={(e) => { const u = [...addresses]; u[index].lastName = e.target.value; setAddresses(u) }}
+                        placeholder="Doe"
+                        className="w-full px-3 py-2 rounded border border-border bg-background" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Street Address</label>
+                      <input type="text" value={addr.address}
+                        onChange={(e) => { const u = [...addresses]; u[index].address = e.target.value; setAddresses(u) }}
+                        placeholder="123 Main St"
+                        className="w-full px-3 py-2 rounded border border-border bg-background" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">City</label>
+                      <input type="text" value={addr.city}
+                        onChange={(e) => { const u = [...addresses]; u[index].city = e.target.value; setAddresses(u) }}
+                        placeholder="New York"
+                        className="w-full px-3 py-2 rounded border border-border bg-background" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">State</label>
+                      <input type="text" value={addr.state}
+                        onChange={(e) => { const u = [...addresses]; u[index].state = e.target.value; setAddresses(u) }}
+                        placeholder="NY"
+                        className="w-full px-3 py-2 rounded border border-border bg-background" />
+                    </div>
+                                        <div>
+                      <label className="block text-sm font-medium mb-2">Zip Code</label>
+                      <input type="text" value={addr.zipCode}
+                        onChange={(e) => { const u = [...addresses]; u[index].zipCode = e.target.value; setAddresses(u) }}
+                        placeholder="10001"
+                        className="w-full px-3 py-2 rounded border border-border bg-background" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Phone</label>
+                      <input type="tel" value={addr.phone}
+                        onChange={(e) => { const u = [...addresses]; u[index].phone = e.target.value; setAddresses(u) }}
+                        placeholder="(555) 000-0000"
+                        className="w-full px-3 py-2 rounded border border-border bg-background" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                    <Button className="gap-2" onClick={() => handleSaveAddress(addr, index)}>
+                      <Save className="w-4 h-4" />Save Address
+                    </Button>
+                    <Button variant="outline" onClick={() => handleDeleteAddress(addr._id)}>
+                      Delete
+                    </Button>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Street Address</label>
-                    <input type="text" value={addr.address}
-                      onChange={(e) => { const u = [...addresses]; u[index].address = e.target.value; setAddresses(u) }}
-                      placeholder="123 Main St"
-                      className="w-full px-3 py-2 rounded border border-border bg-background" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">City</label>
-                    <input type="text" value={addr.city}
-                      onChange={(e) => { const u = [...addresses]; u[index].city = e.target.value; setAddresses(u) }}
-                      placeholder="New York"
-                      className="w-full px-3 py-2 rounded border border-border bg-background" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">State</label>
-                    <input type="text" value={addr.state}
-                      onChange={(e) => { const u = [...addresses]; u[index].state = e.target.value; setAddresses(u) }}
-                      placeholder="NY"
-                      className="w-full px-3 py-2 rounded border border-border bg-background" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Zip Code</label>
-                    <input type="text" value={addr.zipCode}
-                      onChange={(e) => { const u = [...addresses]; u[index].zipCode = e.target.value; setAddresses(u) }}
-                      placeholder="10001"
-                      className="w-full px-3 py-2 rounded border border-border bg-background" />
-                  </div>
-                </div>
-                <Button className="mt-4 gap-2"><Save className="w-4 h-4" />Save Address</Button>
-              </div>
-            ))}
-            <Button variant="outline" className="w-full"
+              ))
+            )}
+            {addressMessage && (
+              <p className="text-sm px-4 py-2 rounded-lg bg-muted text-foreground">{addressMessage}</p>
+            )}
+              <Button variant="outline" className="w-full"
               onClick={() => setAddresses([...addresses, {
-                id: Date.now(), label: 'New Address',
-                address: '', city: '', state: '', zipCode: '', isDefault: false
+                _id: `temp-${Date.now()}`, label: 'New Address',
+                firstName: '', lastName: '', address: '', city: '', state: '', zipCode: '', phone: '', isDefault: false
               }])}>
               + Add New Address
             </Button>

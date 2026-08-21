@@ -8,24 +8,27 @@ import { ChevronLeft, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCart } from '@/context/cart-context'
 import { useAuth } from '@/context/auth-context'
+import { getAddresses } from '@/lib/api'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
 function CheckoutForm() {
   const router = useRouter()
   const { items, totalPrice, clearCart } = useCart()
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
   const stripe = useStripe()
   const elements = useElements()
 
   const [isProcessing, setIsProcessing] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
   const [error, setError] = useState('')
-  const [shippingMethod, setShippingMethod] = useState('standard')
+    const [shippingMethod, setShippingMethod] = useState('standard')
   const [form, setForm] = useState({
     firstName: '', lastName: '', address: '',
     city: '', state: '', zipCode: '', phone: ''
   })
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([])
+  const [selectedAddressId, setSelectedAddressId] = useState('')
 
   const shippingCost =
     shippingMethod === 'express' ? 29.99 :
@@ -39,9 +42,56 @@ function CheckoutForm() {
     if (items.length === 0 && !isCompleted) router.push('/cart')
   }, [items.length, isCompleted])
 
-  useEffect(() => {
+    useEffect(() => {
+    if (isLoading) return
     if (!user) router.push('/auth/login')
+  }, [user, isLoading])
+
+  useEffect(() => {
+    if (!user) return
+    const token = (user as any)?.backendToken
+    if (!token) return
+    getAddresses(token).then((data) => {
+      if (Array.isArray(data)) {
+        setSavedAddresses(data)
+        const def = data.find((a: any) => a.isDefault) || data[0]
+        if (def) {
+          setSelectedAddressId(def._id)
+          setForm((f) => ({
+            ...f,
+            firstName: def.firstName || '',
+            lastName: def.lastName || '',
+            address: def.address || '',
+            city: def.city || '',
+            state: def.state || '',
+            zipCode: def.zipCode || '',
+            phone: def.phone || '',
+          }))
+        }
+      }
+    }).catch(() => {})
   }, [user])
+
+  const handleSelectAddress = (id: string) => {
+    setSelectedAddressId(id)
+    if (id === 'new') {
+      setForm((f) => ({ ...f, address: '', city: '', state: '', zipCode: '' }))
+      return
+    }
+    const addr = savedAddresses.find((a) => a._id === id)
+    if (addr) {
+      setForm((f) => ({
+        ...f,
+        firstName: addr.firstName || '',
+        lastName: addr.lastName || '',
+        address: addr.address || '',
+        city: addr.city || '',
+        state: addr.state || '',
+        zipCode: addr.zipCode || '',
+        phone: addr.phone || '',
+      }))
+    }
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -75,7 +125,7 @@ function CheckoutForm() {
     setIsProcessing(true)
 
     try {
-      // 1. Create order in MongoDB
+      // 1. Create order — server calculates prices & validates stock
       const orderRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/orders`, {
         method: 'POST',
         headers: {
@@ -84,31 +134,25 @@ function CheckoutForm() {
         },
         body: JSON.stringify({
           items: items.map(i => ({
-            name: i.name,
-            price: i.price,
+            productId: i.id,
             quantity: i.quantity,
-            image: i.image,
           })),
           shippingAddress: form,
           shippingMethod,
-          subtotal: totalPrice,
-          shippingCost,
-          tax,
-          totalPrice: total,
         }),
       })
 
       const order = await orderRes.json()
       if (!orderRes.ok) throw new Error(order.message || 'Failed to create order')
 
-      // 2. Create Stripe payment intent
+      // 2. Create Stripe payment intent (amount from server order)
       const paymentRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/payment/create-payment-intent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ amount: total }),
+        body: JSON.stringify({ orderId: order._id }),
       })
 
       const paymentData = await paymentRes.json()
@@ -162,9 +206,23 @@ function CheckoutForm() {
             </div>
           )}
 
-          {/* Shipping Address */}
+                    {/* Shipping Address */}
           <div className="border border-border rounded-lg p-6">
             <h2 className="text-lg font-bold mb-4">Shipping Address</h2>
+            {savedAddresses.length > 0 && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">Use a saved address</label>
+                <select value={selectedAddressId} onChange={(e) => handleSelectAddress(e.target.value)}
+                  className="w-full px-3 py-2 rounded border border-border bg-background">
+                  {savedAddresses.map((a) => (
+                    <option key={a._id} value={a._id}>
+                      {a.label} — {a.address}, {a.city}
+                    </option>
+                  ))}
+                  <option value="new">+ Enter a new address</option>
+                </select>
+              </div>
+            )}
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
